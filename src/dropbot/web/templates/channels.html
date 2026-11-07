@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Points Channels · Drop Bot{% endblock %}
+{% block content %}
+<h1>Points Channels</h1>
+<p class="muted small">Ranked list. The highest-ranked live channels get the Watch Slots that Drops aren't using.</p>
+{% if error %}<div class="banner bad small">{{ error }}</div>{% endif %}
+<div class="row" style="margin-bottom:1rem">
+  <form method="post" action="/channels/add" class="row">
+    <input type="text" name="login" placeholder="channel name or URL" required>
+    <button class="primary">Add</button>
+  </form>
+  <form method="post" action="/channels/import"><button>Import my follows</button></form>
+  <form method="post" action="/channels/balances"><button>Refresh balances</button></form>
+</div>
+
+<div class="panel" style="margin-bottom:1rem">
+  <form method="get" action="/channels" class="row">
+    <strong class="small">Check balance on any channel</strong>
+    <input type="text" name="check" placeholder="channel name or URL" value="{{ check }}" required>
+    <button>Check</button>
+  </form>
+  {% if checked %}
+    <p class="small" style="margin:.6rem 0 0">
+    {% if not checked.user %}No Twitch channel named <strong>{{ checked.login }}</strong>.
+    {% elif not checked.points %}<strong>{{ checked.user.display_name or checked.user.login }}</strong> has no Channel Points.
+    {% else %}You have <strong>{{ checked.points.balance | num }}</strong> Channel Points on
+      <strong>{{ checked.user.display_name or checked.user.login }}</strong>{% if checked.points.bonus_claim_id %}
+      <span class="badge ok">Bonus Chest available</span>{% endif %}.
+      {% if checked.user.channel_id not in on_list %}
+      <form method="post" action="/channels/add" class="inline">
+        <input type="hidden" name="login" value="{{ checked.user.login }}"><button class="link">+ add to list</button></form>
+      {% endif %}
+    {% endif %}
+    </p>
+  {% endif %}
+</div>
+{% if channels %}
+<div class="panel table-wrap">
+<table>
+  <tr><th>#</th><th>Channel</th><th>Status</th><th class="num">Balance</th><th></th></tr>
+  {% for c in channels %}
+  {% set s = live.get(c.channel.channel_id) %}
+  <tr>
+    <td class="muted">{{ loop.index }}</td>
+    <td><a href="https://www.twitch.tv/{{ c.channel.login }}" target="_blank" rel="noopener">{{ c.channel.name }}</a></td>
+    <td class="small">
+      {% if s %}<span class="dot live"></span>live <span class="muted">· {{ s.game_name }}</span>
+        {% if c.channel.channel_id in watched %} <span class="badge ok">watching</span>{% endif %}
+      {% else %}<span class="dot"></span><span class="muted">offline</span>{% endif %}
+    </td>
+    <td class="num">{{ c.balance | num }}
+      {% if c.balance_at %}<div class="muted small">{{ c.balance_at | until }}</div>{% endif %}</td>
+    <td class="num" style="white-space:nowrap">
+      <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline">
+        <input type="hidden" name="delta" value="-1"><button class="link" title="Move up" {{ "disabled" if loop.first }}>▲</button></form>
+      <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline">
+        <input type="hidden" name="delta" value="1"><button class="link" title="Move down" {{ "disabled" if loop.last }}>▼</button></form>
+      <form method="post" action="/channels/{{ c.channel.channel_id }}/remove" class="inline">
+        <button class="link" title="Remove">✕</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="muted small">Total across these channels: <strong>{{ total | num }}</strong>.
+  Live status updates about once a minute. Watched channels' balances update every minute,
+  and the others every 30 minutes or when you press Refresh balances.</p>
+{% else %}
+<div class="panel muted">No channels yet.</div>
+{% endif %}
+{% endblock %}

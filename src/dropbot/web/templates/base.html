@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Drop Bot{% endblock %}</title>
+<script src="/static/htmx.min.js"></script>
+<style>
+:root {
+  --bg: #f6f6f8; --panel: #ffffff; --text: #18181b; --muted: #6b6b76; --line: #e3e3e8;
+  --accent: #7c3aed; --accent-soft: #ede9fe; --ok: #15803d; --ok-soft: #dcfce7;
+  --warn: #b45309; --warn-soft: #fef3c7; --bad: #b91c1c; --bad-soft: #fee2e2;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0f12; --panel: #18181d; --text: #ececf1; --muted: #9b9ba8; --line: #2a2a31;
+    --accent: #a78bfa; --accent-soft: #2e2546; --ok: #4ade80; --ok-soft: #14301f;
+    --warn: #fbbf24; --warn-soft: #3a2c0b; --bad: #f87171; --bad-soft: #3b1515;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); }
+header { background: var(--panel); border-bottom: 1px solid var(--line); }
+header .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1.25rem;
+  padding-block: .75rem; }
+header .brand { font-weight: 700; margin-right: auto; }
+header nav a { text-decoration: none; color: var(--muted); padding: .25rem 0; }
+header nav a.on { color: var(--text); border-bottom: 2px solid var(--accent); }
+header nav { display: flex; gap: 1.1rem; flex-wrap: wrap; }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 16px; }
+main.wrap { padding-block: 1.25rem 3rem; }
+h1 { font-size: 1.35rem; margin: 0 0 1rem; }
+h2 { font-size: 1.05rem; margin: 1.75rem 0 .6rem; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: .9rem 1rem; }
+.grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+.badge { display: inline-block; font-size: .75rem; font-weight: 600; padding: .05rem .45rem;
+  border-radius: 999px; background: var(--line); color: var(--muted); vertical-align: middle; }
+.badge.new { background: var(--accent-soft); color: var(--accent); }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.bad { background: var(--bad-soft); color: var(--bad); }
+.banner { border-radius: 10px; padding: .75rem 1rem; margin-bottom: 1rem; }
+.banner.bad { background: var(--bad-soft); color: var(--bad); }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+.banner form { display: inline; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: .35rem; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+button, .btn { font: inherit; border: 1px solid var(--line); background: var(--panel);
+  color: var(--text); border-radius: 7px; padding: .35rem .8rem; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.link { border: 0; background: none; color: var(--muted); padding: .2rem .35rem; }
+input[type=text], input[type=search] { font: inherit; padding: .4rem .6rem; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--panel); color: var(--text); min-width: 0; }
+.row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+td, th { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--line);
+  vertical-align: middle; }
+th { font-size: .8rem; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%;
+  background: var(--line); margin-right: .35rem; }
+.dot.live { background: #ef4444; }
+form.inline { display: inline; }
+</style>
+</head>
+<body hx-boost="true">
+<header>
+  <div class="wrap">
+    <span class="brand">Drop Bot</span>
+    <nav>
+      <a href="/" class="{{ 'on' if page in ('dashboard', '_dashboard') }}">Dashboard</a>
+      <a href="/campaigns" class="{{ 'on' if page == 'campaigns' }}">Campaigns</a>
+      <a href="/channels" class="{{ 'on' if page == 'channels' }}">Points Channels</a>
+      <a href="/login" class="{{ 'on' if page == 'login' }}">
+        {% if state.account %}{{ state.account.name }}{% else %}Log in{% endif %}</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+{% if state.status == 'paused' %}
+  <div class="banner bad">
+    <strong>Paused: Twitch rejected a request.</strong> This usually means Twitch changed its API and
+    <code>src/dropbot/twitch/protocol.py</code> needs an update.
+    <div class="small">{{ state.protocol_error }} ({{ state.protocol_error_at | until }})</div>
+    <form method="post" action="/resume"><button>Retry</button></form>
+  </div>
+{% elif state.status == 'logged_out' and page != 'login' %}
+  <div class="banner warn">Not logged in. <a href="/login">Log in</a> to start farming.</div>
+{% endif %}
+{% if state.transient_error and state.status == 'running' %}
+  <div class="banner warn small">Last refresh failed (will retry): {{ state.transient_error }}</div>
+{% endif %}
+{% if state.watch_report_error and state.status == 'running' %}
+  <div class="banner warn small">Minute-watched reports to Twitch are failing, so Channel Points may not
+    accrue (Drops are unaffected): {{ state.watch_report_error }}
+    {% if "spade.twitch.tv" in state.watch_report_error %}Check that a DNS or ad blocker isn't blocking
+    <code>spade.twitch.tv</code>.{% endif %}</div>
+{% endif %}
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

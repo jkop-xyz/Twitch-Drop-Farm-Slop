@@ -1,0 +1,17 @@
+services:
+  dropbot:
+    # Prebuilt image from GitHub Actions. `docker compose up --build` builds locally instead.
+    image: ghcr.io/jkop-xyz/twitch-drop-farm-slop:latest
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Postgres (primary). Leave unset to use SQLite in the data volume.
+      DATABASE_URL: ${DATABASE_URL:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - dropbot-data:/data
+
+volumes:
+  dropbot-data:

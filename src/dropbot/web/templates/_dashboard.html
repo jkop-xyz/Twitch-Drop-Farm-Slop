@@ -1,0 +1,77 @@
+<h1>Watch Slots</h1>
+<div class="grid">
+{% for s in slots %}
+  <div class="panel">
+    <div><span class="dot live"></span><strong>{{ s.stream.name }}</strong>
+      <span class="muted small">{{ s.stream.viewers | num }} viewers</span></div>
+    <div class="muted small">{{ s.stream.game_name or "No category" }}</div>
+    <div class="small" style="margin-top:.35rem">
+      {% if s.balance is not none %}<strong>{{ s.balance | num }}</strong> Channel Points
+        {% if week.get(s.stream.channel_id) %}<span class="muted">· +{{ week[s.stream.channel_id] | num }} this week</span>{% endif %}
+      {% else %}<span class="muted">Channel Points: checking…</span>{% endif %}
+    </div>
+    <div class="row small" style="margin-top:.4rem">
+      {% if s.campaign %}<span class="badge new">Drop</span>{% endif %}
+      {% if s.points %}<span class="badge ok">Channel Points</span>{% endif %}
+    </div>
+    {% if s.campaign %}
+      <div class="small" style="margin-top:.5rem">{{ s.campaign.game.name }}: {{ s.campaign.name }}
+        <span class="muted">· ends {{ s.campaign.ends_at | until }}</span></div>
+      {% if s.drop %}
+        <div class="small">{{ s.drop.rewards | join(", ") or s.drop.name }}:
+          {{ s.drop.current_minutes }}/{{ s.drop.required_minutes }} min</div>
+        <div class="bar"><i style="width: {{ (100 * s.drop.current_minutes / s.drop.required_minutes) | round | int }}%"></i></div>
+      {% endif %}
+    {% endif %}
+  </div>
+{% else %}
+  <div class="panel muted">
+  {% if state.status != 'running' %}Not farming.
+  {% elif selected_count == 0 and not channels %}Idle. Select campaigns or add Points Channels to start.
+  {% else %}Idle. Nothing you picked is live right now.{% endif %}
+  </div>
+{% endfor %}
+</div>
+<p class="muted small">
+  {% if state.last_tick %}Last refresh {{ state.last_tick | until }}.{% endif %}
+  {{ selected_count }} campaign{{ "s" if selected_count != 1 }} selected.
+</p>
+
+<h2>Channel Points</h2>
+{% if channels %}
+<div class="panel table-wrap">
+<table>
+  <tr><th>Channel</th><th class="num">Balance</th><th class="num">Last 7 days</th></tr>
+  {% for c in channels %}
+  <tr>
+    <td><span class="dot {{ 'live' if c.channel.channel_id in state.live }}"></span>{{ c.channel.name }}</td>
+    <td class="num">{{ c.balance | num }}</td>
+    <td class="num">{% if week.get(c.channel.channel_id) %}+{{ week[c.channel.channel_id] | num }}{% else %}<span class="muted">–</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% else %}
+<p class="muted">No Points Channels yet. <a href="/channels">Add some</a>.</p>
+{% endif %}
+
+<h2>Recent activity</h2>
+{% if events %}
+<div class="panel table-wrap">
+<table>
+  {% for e in events %}
+  <tr>
+    <td class="muted small" style="white-space:nowrap">{{ e.at | until }}</td>
+    <td>
+      {% if e.kind == "drop" %}<span class="badge new">Drop</span> {{ e.detail }}
+        <span class="muted small">{{ campaign_names.get(e.campaign_id, "") }}</span>
+      {% elif e.kind == "bonus" %}<span class="badge ok">Bonus Chest</span> {{ e.channel_name }}
+      {% else %}<span class="badge">Points</span> +{{ e.amount | num }} on {{ e.channel_name }}{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% else %}
+<p class="muted">Nothing claimed yet.</p>
+{% endif %}

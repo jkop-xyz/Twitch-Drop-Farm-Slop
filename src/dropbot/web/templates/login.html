@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Account · Drop Bot{% endblock %}
+{% block content %}
+<h1>Account</h1>
+{% if error %}<div class="banner bad small">{{ error }}</div>{% endif %}
+{% if state.login_message %}<div class="banner warn small">{{ state.login_message }}</div>{% endif %}
+
+{% if state.account %}
+  <div class="panel">
+    Logged in as <strong>{{ state.account.name }}</strong>
+    <span class="muted small">(user id {{ state.account.user_id }})</span>
+    <form method="post" action="/logout" style="margin-top:.75rem"><button>Log out</button></form>
+  </div>
+{% else %}
+  <div class="panel">
+    <ol style="margin:0; padding-left:1.2rem">
+      <li>On your own PC, open <a href="{{ login_url }}" target="_blank" rel="noopener noreferrer">this Twitch login link</a>
+        and sign in as usual.</li>
+      <li>Twitch then sends you to a page whose address starts with
+        <code>https://www.twitch.tv/#access_token=</code>. Copy that whole address from the address bar.
+        If the page has already changed it, look in your browser history.</li>
+      <li>Paste it here:</li>
+    </ol>
+    <form method="post" action="/login" class="row" style="margin-top:.75rem">
+      <input type="text" name="pasted" placeholder="https://www.twitch.tv/#access_token=…" style="flex:1" required autocomplete="off">
+      <button class="primary">Log in</button>
+    </form>
+    <p class="muted small" style="margin-bottom:0">The token is stored in the bot's database. Anyone who has it can use your Twitch account,
+      so keep this UI on your local network.</p>
+  </div>
+{% endif %}
+{% endblock %}

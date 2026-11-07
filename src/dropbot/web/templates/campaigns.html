@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Campaigns · Drop Bot{% endblock %}
+{% block content %}
+<div class="row" style="justify-content:space-between; margin-bottom:1rem">
+  <h1 style="margin:0">Drop Campaigns</h1>
+  <form method="post" action="/campaigns/refresh"><button>Refresh from Twitch</button></form>
+</div>
+<p class="muted small">Only campaigns you tick are farmed. When several are farmable, the one ending soonest goes first.
+{% if state.campaigns_at %}Fetched {{ state.campaigns_at | until }}.{% endif %}</p>
+
+{% if games %}
+<div class="row" style="margin-bottom:.5rem">
+  <input type="search" id="campaign-search" placeholder="Search games, campaigns, rewards…"
+    style="flex:1; max-width:28rem" autocomplete="off">
+  <span id="campaign-count" class="muted small"></span>
+</div>
+<p id="campaign-none" class="muted" hidden>No campaigns match.</p>
+{% endif %}
+
+{% for game, campaigns in games %}
+<section class="game" data-search="{{ game | lower }}">
+  <h2>{{ game }}</h2>
+  <div class="grid">
+  {% for c in campaigns %}
+    {% set st = states.get(c.id) %}
+    {% set selected = st and st.selected %}
+    <div class="panel campaign"
+      data-search="{{ (c.name ~ ' ' ~ (c.drops | map(attribute='rewards') | map('join', ' ') | join(' ')) ~ ' ' ~ (c.drops | map(attribute='name') | join(' '))) | lower }}">
+      <form method="post" action="/campaigns/{{ c.id }}/select" class="row" style="align-items:flex-start">
+        <input type="hidden" name="selected" value="{{ '' if selected else '1' }}">
+        <button class="{{ 'primary' if selected }}" title="{{ 'Deselect' if selected else 'Select' }}">
+          {{ "✓ Selected" if selected else "Select" }}</button>
+        <div style="flex:1; min-width: 10rem">
+          <strong>{{ c.name }}</strong>
+          <div class="row small" style="margin-top:.2rem">
+            {% if st and not st.seen %}<span class="badge new">new</span>{% endif %}
+            {% if c.id == farming_id %}<span class="badge ok">farming now</span>{% endif %}
+            {% if not c.running(now) and not c.ended(now) %}<span class="badge">starts {{ c.starts_at | until }}</span>{% endif %}
+            {% if c.ended(now) %}<span class="badge">ended: claim window</span>{% endif %}
+            {% if not c.link_ok %}<span class="badge warn">no account linked</span>{% endif %}
+            {% if c.allowed_channel_ids is not none %}<span class="badge">{{ c.allowed_channel_ids | length }} channels only</span>{% endif %}
+          </div>
+          <div class="muted small">ends {{ c.ends_at | until }}</div>
+        </div>
+      </form>
+      {% if not c.link_ok %}
+        <p class="small" style="margin:.5rem 0 0; color: var(--warn)">
+          No game account is linked, so this won't be farmed even if selected.
+          {% if c.link_url %}<a href="{{ c.link_url }}" target="_blank" rel="noopener">Link your account</a>.{% endif %}
+        </p>
+      {% endif %}
+      <table class="small" style="margin-top:.5rem">
+      {% for d in c.drops %}
+        <tr>
+          <td>{{ d.rewards | join(", ") or d.name }}</td>
+          <td class="num" style="white-space:nowrap">
+            {% if d.claimed %}<span class="badge ok">claimed</span>
+            {% elif not d.farmable_by_watching %}<span class="badge">not farmable by watching</span>
+            {% else %}{{ d.current_minutes }}/{{ d.required_minutes }} min{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </table>
+    </div>
+  {% endfor %}
+  </div>
+</section>
+{% else %}
+  <div class="panel muted">
+    {% if state.account %}No campaigns loaded yet. They appear after the first refresh.
+    {% else %}Log in to see campaigns.{% endif %}
+  </div>
+{% endfor %}
+
+<script>
+(() => {
+  const input = document.getElementById("campaign-search");
+  if (!input) return;
+  const KEY = "campaign-search";
+  const apply = () => {
+    const terms = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0, total = 0;
+    for (const section of document.querySelectorAll("section.game")) {
+      const game = section.dataset.search;
+      let any = false;
+      for (const panel of section.querySelectorAll(".campaign")) {
+        total++;
+        const text = game + " " + panel.dataset.search;
+        const hit = terms.every(t => text.includes(t));
+        panel.hidden = !hit;
+        if (hit) { any = true; shown++; }
+      }
+      section.hidden = !any;
+    }
+    document.getElementById("campaign-count").textContent =
+      terms.length ? `${shown} of ${total}` : `${total} campaigns`;
+    document.getElementById("campaign-none").hidden = shown > 0;
+    try { sessionStorage.setItem(KEY, input.value); } catch (e) {}
+  };
+  // Keep the filter across the reload that follows selecting a campaign.
+  const fromUrl = new URLSearchParams(location.search).get("q");
+  if (fromUrl !== null) input.value = fromUrl;
+  else try { input.value = sessionStorage.getItem(KEY) || ""; } catch (e) {}
+  input.addEventListener("input", apply);
+  input.addEventListener("keydown", e => { if (e.key === "Escape") { input.value = ""; apply(); } });
+  apply();
+})();
+</script>
+{% endblock %}

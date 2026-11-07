@@ -1,0 +1,256 @@
+"""Web UI: FastAPI + Jinja + htmx. No auth by design (docs/adr/0001)."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from datetime import datetime, timedelta
+from pathlib import Path
+from urllib.parse import quote
+
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from ..domain import Campaign, DropReason
+from ..farmer import Farmer
+from ..twitch import AuthError, TwitchError
+from ..twitch.protocol import LOGIN_URL
+
+HERE = Path(__file__).parent
+
+
+def _humanize(delta: timedelta) -> str:
+    secs = int(abs(delta.total_seconds()))
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    mins = rem // 60
+    if days:
+        return f"{days}d {hours}h"
+    if hours:
+        return f"{hours}h {mins}m"
+    return f"{mins}m"
+
+
+def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
+    app = FastAPI(title="Twitch Drop Bot", lifespan=lifespan, docs_url=None, redoc_url=None)
+    app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+    templates = Jinja2Templates(directory=HERE / "templates")
+    store = farmer.store
+
+    def until(dt: datetime | None) -> str:
+        if dt is None:
+            return ""
+        delta = dt - farmer.clock()
+        return (
+            ("in " if delta.total_seconds() >= 0 else "")
+            + _humanize(delta)
+            + (" ago" if delta.total_seconds() < 0 else "")
+        )
+
+    def num(n: int | None) -> str:
+        return "–" if n is None else f"{n:,}"
+
+    templates.env.filters["until"] = until
+    templates.env.filters["num"] = num
+
+    def render(request: Request, name: str, **ctx) -> HTMLResponse:
+        ctx.setdefault("state", farmer.state)
+        ctx.setdefault("page", name.split(".")[0])
+        return templates.TemplateResponse(request, name, ctx)
+
+    def back(url: str, error: object = None) -> RedirectResponse:
+        if error:
+            url += "?error=" + quote(str(error))
+        return RedirectResponse(url, status_code=303)
+
+    async def dashboard_ctx() -> dict:
+        st = farmer.state
+        campaigns = {c.id: c for c in st.campaigns}
+        slots = []
+        for s in st.plan.slots:
+            entry = {
+                "stream": s.stream,
+                "campaign": None,
+                "drop": None,
+                "points": not isinstance(s.reason, DropReason) or s.reason.also_points,
+                "balance": st.slot_balances.get(s.stream.channel_id),
+            }
+            if isinstance(s.reason, DropReason) and (c := campaigns.get(s.reason.campaign_id)):
+                entry["campaign"] = c
+                earnable = c.earnable_drops(farmer.clock())
+                entry["drop"] = min(
+                    earnable, key=lambda d: d.required_minutes - d.current_minutes, default=None
+                )
+            slots.append(entry)
+        week = await store.points_gained_since(farmer.clock() - timedelta(days=7))
+        channels = await store.points_channel_info()
+        return {
+            "slots": slots,
+            "channels": channels,
+            "week": week,
+            "events": await store.recent_events(limit=20),
+            "campaign_names": {c.id: f"{c.game.name}: {c.name}" for c in st.campaigns},
+            "selected_count": len(await store.selected_ids()),
+        }
+
+    # --- pages -----------------------------------------------------------------------------
+
+    @app.get("/", response_class=HTMLResponse)
+    async def dashboard(request: Request):
+        return render(request, "dashboard.html", **await dashboard_ctx())
+
+    @app.get("/partials/dashboard", response_class=HTMLResponse)
+    async def dashboard_partial(request: Request):
+        return render(request, "_dashboard.html", **await dashboard_ctx())
+
+    @app.get("/campaigns", response_class=HTMLResponse)
+    async def campaigns_page(request: Request):
+        now = farmer.clock()
+        states = await store.campaign_states()
+        drop_slot = farmer.state.plan.drop_slot
+        farming_id = drop_slot.reason.campaign_id if drop_slot else None
+        by_game: dict[str, list[Campaign]] = defaultdict(list)
+        for c in farmer.state.campaigns:
+            if c.ended(now) and not c.claimable_drops(now):
+                continue
+            by_game[c.game.name].append(c)
+        games = [
+            (name, sorted(cs, key=lambda c: c.ends_at))
+            for name, cs in sorted(by_game.items(), key=lambda kv: kv[0].lower())
+        ]
+        resp = render(
+            request, "campaigns.html", games=games, states=states, now=now, farming_id=farming_id
+        )
+        await store.mark_all_seen()  # the "new" badge shows once
+        return resp
+
+    @app.post("/campaigns/{campaign_id}/select")
+    async def select_campaign(campaign_id: str, selected: str = Form("")):
+        await store.set_selected(campaign_id, selected == "1")
+        farmer.wake()
+        return back("/campaigns")
+
+    @app.post("/campaigns/refresh")
+    async def refresh_campaigns():
+        farmer.wake(refresh_campaigns=True)
+        return back("/campaigns")
+
+    def channel_login(raw: str) -> str:
+        """Accept "name", "@name" or a twitch.tv URL."""
+        return raw.strip().rstrip("/").lstrip("@").rsplit("/", 1)[-1].lower()
+
+    @app.get("/channels", response_class=HTMLResponse)
+    async def channels_page(request: Request, error: str = "", check: str = ""):
+        checked = None
+        if check and farmer.state.account:
+            login = channel_login(check)
+            try:
+                found = await farmer.check_balance(login)
+            except TwitchError as e:
+                error = f"Balance check failed: {e}"
+            else:
+                checked = {
+                    "login": login,
+                    "user": found[0] if found else None,
+                    "points": found[1] if found else None,
+                }
+        channels = await store.points_channel_info()
+        return render(
+            request,
+            "channels.html",
+            channels=channels,
+            total=sum(c.balance or 0 for c in channels),
+            live=farmer.state.live,
+            error=error,
+            check=check,
+            checked=checked,
+            on_list={c.channel.channel_id for c in channels},
+            watched={s.stream.channel_id for s in farmer.state.plan.slots},
+        )
+
+    @app.post("/channels/balances")
+    async def refresh_balances():
+        if farmer.state.account is None:
+            return back("/channels", "Log in first.")
+        try:
+            await farmer.refresh_balances()
+        except TwitchError as e:
+            return back("/channels", f"Balance refresh failed: {e}")
+        return back("/channels")
+
+    @app.post("/channels/add")
+    async def add_channel(login: str = Form(...)):
+        login = channel_login(login)
+        if not login:
+            return back("/channels")
+        try:
+            user = await farmer.twitch.lookup_user(login)
+        except TwitchError as e:
+            return back("/channels", f"Lookup failed: {e}")
+        if user is None:
+            return back("/channels", f"No Twitch channel named {login}")
+        await store.add_points_channel(user.channel_id, user.login, user.display_name)
+        farmer.wake()
+        return back("/channels")
+
+    @app.post("/channels/import")
+    async def import_follows():
+        try:
+            follows = await farmer.twitch.followed_channels()
+        except TwitchError as e:
+            return back("/channels", f"Import failed: {e}")
+        for u in follows:
+            if not u.channel_id:
+                found = await farmer.twitch.lookup_user(u.login)
+                if found is None:
+                    continue
+                u = found
+            await store.add_points_channel(u.channel_id, u.login, u.display_name)
+        farmer.wake()
+        return back("/channels")
+
+    @app.post("/channels/{channel_id}/remove")
+    async def remove_channel(channel_id: str):
+        await store.remove_points_channel(channel_id)
+        farmer.wake()
+        return back("/channels")
+
+    @app.post("/channels/{channel_id}/move")
+    async def move_channel(channel_id: str, delta: int = Form(...)):
+        await store.move_points_channel(channel_id, delta)
+        farmer.wake()
+        return back("/channels")
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_page(request: Request, error: str = ""):
+        return render(request, "login.html", login_url=LOGIN_URL, error=error)
+
+    @app.post("/login")
+    async def login(pasted: str = Form(...)):
+        try:
+            await farmer.login(pasted)
+        except AuthError as e:
+            return back("/login", e)
+        except TwitchError as e:
+            return back("/login", f"Could not reach Twitch: {e}")
+        return back("/")
+
+    @app.post("/logout")
+    async def logout():
+        await farmer.logout()
+        return back("/login")
+
+    @app.post("/resume")
+    async def resume():
+        farmer.resume()
+        return back("/")
+
+    @app.get("/healthz")
+    async def healthz():
+        st = farmer.state
+        return JSONResponse(
+            {"status": st.status, "last_tick": st.last_tick.isoformat() if st.last_tick else None}
+        )
+
+    return app

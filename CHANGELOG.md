@@ -6,6 +6,16 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-07
+
+Watching now earns Channel Points again.
+
+### Fixed
+- **Passive watching earned no Channel Points.** Only Bonus Chests added points. The once-a-minute watch report didn't name the player and was sent as the Android app. Twitch accepted it but credited no points. It now reports the web player (`"player": "site"`) with a browser User-Agent, as the maintained points miners do. Checked on a real account: +10 points every 5 minutes on each watched channel.
+
+### Changed
+- Each Channel Points gain is logged, e.g. `+10 Channel Points on KingKongor`.
+
 ## [0.4.0] - 2026-11-07
 
 Detects Points Channels that have Channel Points turned off.

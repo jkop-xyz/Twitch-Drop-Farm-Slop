@@ -477,6 +477,7 @@ class Farmer:
         self.state.slot_balances[stream.channel_id] = state.balance
         previous = await self.store.set_balance(stream.channel_id, state.balance)
         if previous is not None and state.balance > previous:
+            log.info("+%d Channel Points on %s", state.balance - previous, stream.name)
             await self.store.record(
                 "points",
                 amount=state.balance - previous,

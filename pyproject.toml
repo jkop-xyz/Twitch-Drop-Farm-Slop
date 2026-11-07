@@ -1,6 +1,6 @@
 [project]
 name = "dropbot"
-version = "0.4.0"
+version = "0.4.1"
 description = "Headless Twitch Drops and Channel Points farmer with a web UI"
 requires-python = ">=3.12"
 dependencies = [

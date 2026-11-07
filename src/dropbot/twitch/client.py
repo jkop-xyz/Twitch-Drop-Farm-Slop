@@ -365,12 +365,22 @@ class TwitchClient:
                     "logged_in": True,
                     "minutes_logged": 1,
                     "muted": False,
+                    # Channel Points are only credited for events from a known player; every
+                    # maintained points miner reports the web player. Without it Twitch still
+                    # answers 204 but the minute earns no points.
+                    "player": "site",
                     "user_id": self._user_id,
                 },
             }
         ]
         encoded = b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
-        status, _ = await self._request("POST", url, data={"data": encoded})
+        # Sent like the web player sends it (the event claims player=site), not as the app.
+        status, _ = await self._request(
+            "POST",
+            url,
+            data={"data": encoded},
+            headers={"User-Agent": protocol.BROWSER_USER_AGENT},
+        )
         if status != 204:
             self._spade.pop(stream.login, None)
         return status == 204

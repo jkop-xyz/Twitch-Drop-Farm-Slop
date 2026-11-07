@@ -373,3 +373,21 @@ async def test_points_many_is_batched():
     out = await c.points_many(["a", "b", "a"])
     assert out["a"].balance == 5 and out["b"] is None
     assert len(c.calls) == 1 and len(c.calls[0][2]["json"]) == 2
+
+
+async def test_minute_watched_reports_the_web_player():
+    from base64 import b64decode
+
+    from .factories import stream
+
+    c = Scripted((204, b""))
+    c._spade["user1"] = "https://spade.example/track"
+    assert await c.send_minute_watched(stream("1"))
+    method, url, kw = c.calls[0]
+    assert (method, url) == ("POST", "https://spade.example/track")
+    assert kw["headers"]["User-Agent"] == protocol.BROWSER_USER_AGENT
+    [event] = json.loads(b64decode(kw["data"]["data"]))
+    props = event["properties"]
+    assert event["event"] == "minute-watched"
+    assert props["player"] == "site"  # without it Twitch credits no Channel Points
+    assert props["user_id"] == "42" and props["channel_id"] == "1" and props["live"] is True

@@ -268,7 +268,7 @@ class Store:
             rows = (await s.scalars(self._channels())).all()
             return [
                 PointsChannelInfo(
-                    PointsChannel(r.channel_id, r.login, r.display_name, r.rank),
+                    PointsChannel(r.channel_id, r.login, r.display_name, r.rank, r.points_enabled),
                     r.balance,
                     _utc(r.balance_at),
                 )
@@ -333,6 +333,12 @@ class Store:
             row.balance = balance
             row.balance_at = datetime.now(UTC)
             return prev
+
+    async def set_points_enabled(self, channel_id: str, enabled: bool) -> None:
+        async with self._session.begin() as s:
+            row = await s.get(PointsChannelRow, (self._uid(), channel_id))
+            if row is not None:
+                row.points_enabled = enabled
 
     # --- Claim history ---------------------------------------------------------------------
 

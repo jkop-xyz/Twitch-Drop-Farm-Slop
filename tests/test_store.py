@@ -75,6 +75,15 @@ async def test_balance_tracking(store):
     assert info.balance == 160 and info.balance_at.tzinfo is not None
 
 
+async def test_points_enabled_is_unknown_until_set(store):
+    await store.add_points_channel("1", "a")
+    assert (await store.points_channels())[0].points_enabled is None
+    await store.set_points_enabled("1", False)
+    assert (await store.points_channels())[0].points_off
+    await store.set_points_enabled("1", True)
+    assert (await store.points_channels())[0].points_enabled is True
+
+
 async def test_claim_history_and_points_summary(store):
     now = datetime.now(UTC)
     await store.record("points", amount=10, channel_id="1", at=now - timedelta(days=10))

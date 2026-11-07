@@ -50,6 +50,8 @@ class PointsChannelRow(Base):
     rank: Mapped[int] = mapped_column(Integer)
     balance: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     balance_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Whether the channel has Channel Points turned on. None until the bot has checked.
+    points_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
 
 class EventRow(Base):

@@ -53,6 +53,9 @@ class DropSession:
 class PointsState:
     balance: int
     bonus_claim_id: str | None
+    # False when the streamer has Channel Points turned off (or can't have them: not an
+    # affiliate or partner). Watching such a channel earns nothing.
+    enabled: bool = True
 
 
 class TwitchApi(Protocol):

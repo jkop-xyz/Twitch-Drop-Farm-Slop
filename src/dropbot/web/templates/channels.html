@@ -18,6 +18,8 @@ tr:hover .actions, tr:focus-within .actions { opacity: 1; }
 .actions button.danger:hover { color: var(--bad); background: var(--bad-soft); }
 tbody tr:hover td { background: var(--panel-2); }
 .who a { color: inherit; }
+.who .off-note { display: block; font-size: .75rem; color: var(--faint); font-weight: 400; }
+.who .off-note svg.i { vertical-align: -.15em; }
 .total { font-weight: 700; }
 td.grab { width: 1.75rem; padding-right: 0; }
 .handle { display: grid; place-items: center; width: 1.6rem; height: 1.8rem; padding: 0; border: 0; border-radius: 6px;
@@ -69,6 +71,7 @@ tbody tr.saved td { animation: saved 1s ease-out; }
       <div class="check-result">
       {% if not checked.user %}<span class="muted">No Twitch channel named <strong>{{ checked.login }}</strong>.</span>
       {% elif not checked.points %}<strong>{{ checked.user.display_name or checked.user.login }}</strong><span class="muted">has no Channel Points.</span>
+      {% elif not checked.points.enabled %}<strong>{{ checked.user.display_name or checked.user.login }}</strong><span class="muted">has Channel Points turned off. Watching there earns none.</span>
       {% else %}
         <span class="avatar sm" style="--h: {{ checked.user.login | hue }}">{{ (checked.user.display_name or checked.user.login)[:1] }}</span>
         <span>You have <strong class="num">{{ checked.points.balance | num }}</strong> on <strong>{{ checked.user.display_name or checked.user.login }}</strong></span>
@@ -90,12 +93,13 @@ tbody tr.saved td { animation: saved 1s ease-out; }
   <tbody id="channel-rows">
   {% for c in channels %}
   {% set s = live.get(c.channel.channel_id) %}
-  <tr data-id="{{ c.channel.channel_id }}">
+  <tr data-id="{{ c.channel.channel_id }}"{% if c.channel.points_off %} class="points-off"{% endif %}>
     <td class="grab"><button type="button" class="handle" title="Drag to reorder (or focus and use the arrow keys)" aria-label="Reorder {{ c.channel.name }}"><svg class="i"><use href="#i-grip"/></svg></button></td>
     <td class="rank">{{ loop.index }}</td>
     <td><div class="who"><span class="dot {{ 'live' if s }}"></span>
       <span class="avatar sm" style="--h: {{ c.channel.login | hue }}">{{ c.channel.name[:1] }}</span>
-      <a class="name" href="https://www.twitch.tv/{{ c.channel.login }}" target="_blank" rel="noopener">{{ c.channel.name }}</a></div></td>
+      <div><a class="name" href="https://www.twitch.tv/{{ c.channel.login }}" target="_blank" rel="noopener">{{ c.channel.name }}</a>
+        {% if c.channel.points_off %}<span class="off-note"><svg class="i"><use href="#i-alert"/></svg> Channel Points are turned off here. Only watched for Drops.</span>{% endif %}</div></div></td>
     <td class="col-status">
       {% if s %}<span class="status"><span class="dot live"></span>Live <span class="game">· {{ s.game_name }}</span></span>
         {% if c.channel.channel_id in watched %}<span class="badge ok" style="margin-left:.3rem"><svg class="i"><use href="#i-eye"/></svg>watching</span>{% endif %}
@@ -120,7 +124,8 @@ tbody tr.saved td { animation: saved 1s ease-out; }
     <td class="num total">{{ total | num }}</td><td></td></tr></tfoot>
 </table>
 </div>
-<p class="tiny faint" style="margin-top:.6rem">Live status updates about once a minute. Balances of watched channels update every minute, the rest every 30 minutes{% if state.balances_at %} (last {{ state.balances_at | until }}){% endif %}. Hover a balance to see when it was fetched.</p>
+<p class="tiny faint" style="margin-top:.6rem">Live status updates about once a minute. Balances of watched channels update every minute, the rest every 30 minutes{% if state.balances_at %} (last {{ state.balances_at | until }}){% endif %}. Hover a balance to see when it was fetched.
+  {% if channels | selectattr("channel.points_off") | list %}Greyed-out channels have Channel Points turned off (common for channels that aren't affiliates or partners). The bot doesn't watch them for points, only when one is the stream for a Drop you selected, and it checks again every 30 minutes in case they turn points on.{% endif %}</p>
 {% else %}
 <div class="panel empty" style="text-align:center; padding:2rem">No channels yet. Add one above, or import the channels you follow.</div>
 {% endif %}

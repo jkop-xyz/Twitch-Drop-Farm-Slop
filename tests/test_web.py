@@ -86,6 +86,12 @@ async def test_points_channels_add_reorder_remove_import(env):
     r = await c.post("/channels/order", data={"order": "4,1,nope,2"})  # drag and drop
     assert r.status_code == 204
     assert [p.login for p in await store.points_channels()] == ["delta", "alpha", "beta"]
+    await store.set_points_enabled("4", False)
+    html = (await c.get("/channels")).text
+    assert 'class="points-off"' in html and "Channel Points are turned off here" in html
+    tw.balances["delta"] = 5
+    tw.points_off.add("delta")
+    assert "has Channel Points turned off" in (await c.get("/channels?check=delta")).text
     assert (
         'id="channel-rows"' in (html := (await c.get("/channels")).text) and 'data-id="4"' in html
     )

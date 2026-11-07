@@ -6,6 +6,20 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
+Detects Points Channels that have Channel Points turned off.
+
+### Added
+- **Channels without Channel Points are detected and skipped for points.** Many channels that aren't affiliates or partners have no Channel Points, so watching them earns nothing.
+  - The Points Channels page and the dashboard grey these channels out, with a note saying why.
+  - The bot no longer gives them a Watch Slot for points. It still watches one when it's the stream for a Drop you selected, but no longer prefers it over other streams for that Drop.
+  - New channels are checked before they're first watched. All channels are checked again every 30 minutes, and right away with "Refresh balances", so a channel that turns points on is picked up again.
+  - "Check your balance on any channel" also tells you when a channel has Channel Points turned off.
+
+### Upgrade notes
+- Migration `0003` adds one column to the Points Channels table and runs automatically on startup. Existing channels are checked on the first round after the upgrade.
+
 ## [0.3.0] - 2026-11-07
 
 Drag and drop to rank Points Channels.

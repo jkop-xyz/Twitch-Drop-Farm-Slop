@@ -37,7 +37,7 @@ A claimable bundle of extra Channel Points that appears periodically while watch
 _Avoid_: Bonus, chest, community points claim
 
 **Points Channel**:
-A channel on the owner's chosen list for earning Channel Points.
+A channel on the owner's chosen list for earning Channel Points. A Points Channel whose streamer has Channel Points turned off earns nothing, so it is never watched for points, only as the stream for a Drop.
 _Avoid_: Followed channel, favorite
 
 **Watch Slot**:

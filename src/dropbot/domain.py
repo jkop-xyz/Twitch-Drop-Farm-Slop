@@ -154,10 +154,17 @@ class PointsChannel:
     login: str
     display_name: str = ""
     rank: int = 0
+    # False: the channel has Channel Points turned off, so it's only worth watching for a Drop.
+    # None: not checked yet (treated as on).
+    points_enabled: bool | None = None
 
     @property
     def name(self) -> str:
         return self.display_name or self.login
+
+    @property
+    def points_off(self) -> bool:
+        return self.points_enabled is False
 
 
 @dataclass(frozen=True)

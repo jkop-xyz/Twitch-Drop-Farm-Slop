@@ -173,8 +173,13 @@ def parse_directory(data: Json, game: Game) -> list[Stream]:
     return out
 
 
-def parse_points_context(data: Json) -> tuple[int, str | None]:
-    """ChannelPointsContext → (balance, available Bonus Chest claim id)."""
-    cp = data["community"]["channel"]["self"]["communityPoints"]
+def parse_points_context(data: Json) -> tuple[int, str | None, bool]:
+    """ChannelPointsContext → (balance, available Bonus Chest claim id, points enabled)."""
+    channel = data["community"]["channel"]
+    settings = channel.get("communityPointsSettings") or {}
+    enabled = settings.get("isEnabled") is not False
+    cp = channel["self"]["communityPoints"]
+    if cp is None and not enabled:
+        return 0, None, False
     claim = cp.get("availableClaim")
-    return int(cp["balance"]), (claim["id"] if claim else None)
+    return int(cp["balance"]), (claim["id"] if claim and enabled else None), enabled

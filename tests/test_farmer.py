@@ -233,6 +233,60 @@ async def test_drop_takes_priority_over_points(farmer, store, tw):
     assert watching(farmer) == ["drops", "p1"]
 
 
+async def test_points_off_channel_is_detected_before_planning_and_only_watched_for_drops(
+    farmer, store, tw
+):
+    await logged_in(farmer)
+    for cid in ("1", "2", "3"):
+        tw.go_live(stream(cid, game=None, drops_enabled=False))
+        tw.balances[f"user{cid}"] = 100
+        await store.add_points_channel(cid, f"user{cid}")
+    tw.points_off.add("user1")
+    await farmer.tick()
+    assert watching(farmer) == ["2", "3"]  # never watched for points, not even on the first tick
+    off = {p.channel_id: p.points_off for p in await store.points_channels()}
+    assert off == {"1": True, "2": False, "3": False}
+
+    # A Drop that can only be farmed there still gets it.
+    tw.campaign_list = [campaign("c1", allowed={"1"})]
+    tw.go_live(stream("1"))
+    farmer.wake(refresh_campaigns=True)
+    await farmer.tick()
+    await store.set_selected("c1", True)
+    await farmer.tick()
+    assert watching(farmer) == ["1", "2"]
+    assert farmer.state.slot_points_off == {"1"}
+
+
+async def test_channel_turning_points_off_is_dropped_and_turning_on_again_is_picked_up(
+    farmer, store, tw
+):
+    await logged_in(farmer)
+    for cid in ("1", "2", "3"):
+        tw.go_live(stream(cid, game=None, drops_enabled=False))
+        tw.balances[f"user{cid}"] = 100
+        await store.add_points_channel(cid, f"user{cid}")
+    await farmer.tick()
+    assert watching(farmer) == ["1", "2"]
+    tw.points_off.add("user1")
+    await farmer.tick()  # noticed while watching
+    await farmer.tick()
+    assert watching(farmer) == ["2", "3"]
+    tw.points_off.clear()
+    await farmer.refresh_balances()
+    await farmer.tick()
+    assert watching(farmer) == ["1", "2"]
+
+
+async def test_unknown_channel_is_checked_only_once_per_session(farmer, store, tw):
+    await logged_in(farmer)
+    await store.add_points_channel("9", "gone")  # Twitch returns nothing for it
+    await farmer.tick()
+    tw.calls.clear()
+    await farmer.tick()
+    assert "points_many" not in tw.calls
+
+
 # --- failures ----------------------------------------------------------------------------
 
 

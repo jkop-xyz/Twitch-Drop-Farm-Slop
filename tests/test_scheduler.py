@@ -6,14 +6,14 @@ from dropbot.scheduler import Snapshot, plan
 from .factories import NOW, OTHER_GAME, campaign, drop, live, points, stream
 
 
-def snap(campaigns=(), selected=None, streams=(), pts=(), current=None, slots=2):
+def snap(campaigns=(), selected=None, streams=(), pts=(), current=None, slots=2, off=()):
     sel = frozenset(c.id for c in campaigns) if selected is None else frozenset(selected)
     return Snapshot(
         now=NOW,
         campaigns=list(campaigns),
         selected=sel,
         live=live(*streams),
-        points_channels=points(*pts),
+        points_channels=points(*pts, off=off),
         current_drop_channel=current,
         slots=slots,
     )
@@ -151,6 +151,28 @@ def test_shared_drop_and_points_stream_frees_a_slot_for_next_points_channel():
 def test_without_farmable_campaign_both_slots_go_to_points():
     p = plan(snap([], streams=[stream("p1"), stream("p2"), stream("p3")], pts=["p1", "p2", "p3"]))
     assert watched(p) == ["p1", "p2"]
+
+
+def test_points_channel_with_points_off_gets_no_points_slot():
+    p = plan(
+        snap(
+            [],
+            streams=[stream("p1"), stream("p2"), stream("p3")],
+            pts=["p1", "p2", "p3"],
+            off=["p1"],
+        )
+    )
+    assert watched(p) == ["p2", "p3"]
+
+
+def test_points_off_channel_is_still_watched_for_a_drop_but_not_preferred():
+    c = campaign("c1")
+    both = [stream("off", viewers=9000), stream("on", viewers=5)]
+    p = plan(snap([c], streams=both, pts=["off", "on"], off=["off"]))
+    assert p.drop_slot.stream.channel_id == "on"  # the one that also earns points
+    only = plan(snap([c], streams=[stream("off")], pts=["off"], off=["off"], slots=1))
+    assert watched(only) == ["off"]
+    assert only.drop_slot.reason.also_points is False
 
 
 # --- points preemption & switching -------------------------------------------------------

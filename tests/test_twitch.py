@@ -159,7 +159,17 @@ def test_parse_points_context():
             }
         }
     }
-    assert parse_points_context(data) == (1234, "cl1")
+    assert parse_points_context(data) == (1234, "cl1", True)
+
+
+def test_parse_points_context_points_turned_off():
+    # Shape seen on real channels without Channel Points (not affiliate/partner).
+    channel = {"self": {"communityPoints": None}, "communityPointsSettings": {"isEnabled": False}}
+    assert parse_points_context({"community": {"channel": channel}}) == (0, None, False)
+    channel["self"]["communityPoints"] = {"balance": 70, "availableClaim": {"id": "x"}}
+    assert parse_points_context({"community": {"channel": channel}}) == (70, None, False)
+    channel["communityPointsSettings"]["isEnabled"] = True
+    assert parse_points_context({"community": {"channel": channel}}) == (70, "x", True)
 
 
 @pytest.mark.parametrize(

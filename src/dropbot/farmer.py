@@ -49,6 +49,8 @@ class FarmerState:
     skipped: dict[str, datetime] = field(default_factory=dict)
     # Channel Points balance on each currently watched stream, by channel id.
     slot_balances: dict[str, int] = field(default_factory=dict)
+    # Watched channels (by id) that have Channel Points turned off.
+    slot_points_off: set[str] = field(default_factory=set)
     balances_at: datetime | None = None
     campaigns: list[Campaign] = field(default_factory=list)
     campaigns_at: datetime | None = None
@@ -76,6 +78,8 @@ class Farmer:
         self._lock = asyncio.Lock()
         self._tasks: list[asyncio.Task] = []
         self._watch_failures: dict[str, int] = {}
+        # Points Channels whose Channel Points state was looked up this session (see _tick).
+        self._points_checked: set[str] = set()
 
     # --- lifecycle -------------------------------------------------------------------------
 
@@ -171,11 +175,13 @@ class Farmer:
         st.campaigns_at = None
         st.live = {}
         st.slot_balances = {}
+        st.slot_points_off = set()
         st.skipped = {}
         st.balances_at = None
         st.transient_error = None
         st.watch_report_error = None
         self._watch_failures = {}
+        self._points_checked = set()
         self._force_campaigns = True
 
     def resume(self) -> None:
@@ -304,6 +310,17 @@ class Farmer:
 
         selected = await self.store.selected_ids()
         points_channels = await self.store.points_channels()
+        # Channels not checked yet (new, or from before this was tracked): find out whether they
+        # have Channel Points before planning, so one that doesn't never gets a points slot.
+        unchecked = [
+            p
+            for p in points_channels
+            if p.points_enabled is None and p.channel_id not in self._points_checked
+        ]
+        if unchecked:
+            self._points_checked.update(p.channel_id for p in unchecked)
+            await self._refresh_balances(unchecked)
+            points_channels = await self.store.points_channels()
 
         # Which streams could matter: Points Channels, plus candidates for Farmable Campaigns.
         probe = Snapshot(now, st.campaigns, selected, {}, points_channels, slots=self.slots)
@@ -372,12 +389,16 @@ class Farmer:
             for s in new_plan.slots
             if s.stream.channel_id in st.slot_balances
         }
+        st.slot_points_off = set()
         for slot in new_plan.slots:
             if slot.stream.channel_id in points_ids:
                 await self._farm_points(slot.stream)
             elif (pts := await self.twitch.points(slot.stream.login)) is not None:
                 # A Drop-only stream: show the balance, but don't claim or record anything.
-                st.slot_balances[slot.stream.channel_id] = pts.balance
+                if pts.enabled:
+                    st.slot_balances[slot.stream.channel_id] = pts.balance
+                else:
+                    st.slot_points_off.add(slot.stream.channel_id)
 
         if st.balances_at is None or now - st.balances_at >= BALANCE_REFRESH:
             watched = {s.stream.channel_id for s in new_plan.slots}
@@ -394,7 +415,9 @@ class Farmer:
         n = 0
         for p in channels:
             if (state := states.get(p.login)) is not None:
-                await self.store.set_balance(p.channel_id, state.balance)
+                await self.store.set_points_enabled(p.channel_id, state.enabled)
+                if state.enabled:
+                    await self.store.set_balance(p.channel_id, state.balance)
                 n += 1
         return n
 
@@ -440,6 +463,11 @@ class Farmer:
     async def _farm_points(self, stream: Stream) -> None:
         state = await self.twitch.points(stream.login)
         if state is None:
+            return
+        await self.store.set_points_enabled(stream.channel_id, state.enabled)
+        if not state.enabled:
+            # Turned off since the last check. Planning leaves it out from the next tick on.
+            self.state.slot_points_off.add(stream.channel_id)
             return
         if state.bonus_claim_id and await self.twitch.claim_bonus(
             stream.channel_id, state.bonus_claim_id

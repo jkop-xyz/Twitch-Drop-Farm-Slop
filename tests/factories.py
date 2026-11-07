@@ -56,8 +56,12 @@ def stream(channel_id, *, game=GAME, viewers=100, drops_enabled=True) -> Stream:
     )
 
 
-def points(*channel_ids: str) -> list[PointsChannel]:
-    return [PointsChannel(cid, f"user{cid}", rank=i) for i, cid in enumerate(channel_ids)]
+def points(*channel_ids: str, off: tuple[str, ...] = ()) -> list[PointsChannel]:
+    """Points Channels in rank order; those in `off` have Channel Points turned off."""
+    return [
+        PointsChannel(cid, f"user{cid}", rank=i, points_enabled=cid not in off)
+        for i, cid in enumerate(channel_ids)
+    ]
 
 
 def live(*streams: Stream) -> dict[str, Stream]:

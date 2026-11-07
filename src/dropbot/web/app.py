@@ -140,6 +140,7 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
                 "drop": None,
                 "points": not isinstance(s.reason, DropReason) or s.reason.also_points,
                 "balance": st.slot_balances.get(s.stream.channel_id),
+                "points_off": s.stream.channel_id in st.slot_points_off,
             }
             if isinstance(s.reason, DropReason) and (c := campaigns.get(s.reason.campaign_id)):
                 entry["campaign"] = c

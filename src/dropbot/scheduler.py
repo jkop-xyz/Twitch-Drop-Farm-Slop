@@ -43,7 +43,8 @@ def farmable_campaigns(snap: Snapshot) -> list[Campaign]:
 
 
 def _points_rank(points_channels: Iterable[PointsChannel]) -> dict[str, int]:
-    ordered = sorted(points_channels, key=lambda p: p.rank)
+    """Rank of each Points Channel that earns Channel Points (turned-off ones are left out)."""
+    ordered = sorted((p for p in points_channels if not p.points_off), key=lambda p: p.rank)
     return {p.channel_id: i for i, p in enumerate(ordered)}
 
 
@@ -84,9 +85,12 @@ def plan(snap: Snapshot) -> Plan:
             break
 
     taken = {s.stream.channel_id for s in slots}
+    # A channel with Channel Points turned off earns nothing here: it's only watched for a Drop.
     for pc in sorted(snap.points_channels, key=lambda p: p.rank):
         if len(slots) >= snap.slots:
             break
+        if pc.points_off:
+            continue
         stream = snap.live.get(pc.channel_id)
         if stream is not None and pc.channel_id not in taken:
             slots.append(SlotAssignment(stream, PointsReason()))

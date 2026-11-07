@@ -168,3 +168,64 @@ async def test_campaigns_page_has_search_data(env):
     assert 'id="campaign-search"' in html
     assert 'data-search="some game"' in html
     assert 'data-search="campaign c1' in html and "drop d1" in html
+
+
+async def test_dashboard_activity_lists_claims_not_points_ticks(env):
+    farmer, _, store, c = env
+    await farmer.login(TOKEN)
+    await store.record("drop", campaign_id="c1", detail="Cool Hat")
+    for _ in range(30):
+        await store.record("points", amount=10, channel_id="1", channel_name="busy")
+    html = (await c.get("/partials/dashboard")).text
+    assert "Cool Hat" in html and "+10 on busy" not in html
+
+
+@pytest.mark.parametrize(
+    "headers,allowed",
+    [
+        ({}, True),  # curl / scripts
+        ({"sec-fetch-site": "same-origin"}, True),
+        ({"sec-fetch-site": "none"}, True),
+        ({"sec-fetch-site": "cross-site"}, False),
+        ({"sec-fetch-site": "same-site"}, False),
+        ({"origin": "http://bot"}, True),
+        ({"origin": "http://evil.example"}, False),
+        ({"origin": "null"}, False),
+    ],
+)
+async def test_cross_site_posts_are_rejected(env, headers, allowed):
+    farmer, _, _, c = env
+    await farmer.login(TOKEN)
+    r = await c.post("/logout", headers=headers)
+    assert (r.status_code != 403) is allowed
+    assert (farmer.state.status == "logged_out") is allowed
+
+
+async def test_get_requests_are_never_blocked(env):
+    _, _, _, c = env
+    assert (await c.get("/", headers={"sec-fetch-site": "cross-site"})).status_code == 200
+
+
+async def test_htmx_select_swaps_just_the_card(env):
+    farmer, tw, store, c = env
+    await farmer.login(TOKEN)
+    tw.campaign_list = [campaign("c1")]
+    await farmer.tick()
+    r = await c.post("/campaigns/c1/select", data={"selected": "1"}, headers={"HX-Request": "true"})
+    assert r.status_code == 200
+    assert (
+        r.text.lstrip().startswith('<div class="panel campaign"')
+        or 'class="panel campaign"' in r.text[:300]
+    )
+    assert "✓ Selected" in r.text and "<html" not in r.text
+    assert await store.selected_ids() == {"c1"}
+
+
+async def test_account_link_url_must_be_https(env):
+    farmer, tw, _, c = env
+    await farmer.login(TOKEN)
+    from dataclasses import replace
+
+    tw.campaign_list = [replace(campaign("c1", linked=False), link_url="javascript:alert(1)")]
+    await farmer.tick()
+    assert "javascript:" not in (await c.get("/campaigns")).text

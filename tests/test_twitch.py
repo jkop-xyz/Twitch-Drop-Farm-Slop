@@ -338,3 +338,28 @@ async def test_watch_heads_every_chunk():
         ("HEAD", "https://seg/1.ts"),
         ("HEAD", "https://seg/2.ts"),
     ]
+
+
+async def test_unexpected_response_shape_becomes_protocol_error():
+    c = Scripted((200, {"data": {"currentUser": {}}}))  # no "inventory"
+    with pytest.raises(ProtocolError) as e:
+        await c.campaigns()
+    assert "shape" in e.value.message
+
+
+async def test_points_many_is_batched():
+    def ctx(bal):
+        return {
+            "data": {
+                "community": {
+                    "channel": {
+                        "self": {"communityPoints": {"balance": bal, "availableClaim": None}}
+                    }
+                }
+            }
+        }
+
+    c = Scripted((200, [ctx(5), {"data": {"community": None}}]))
+    out = await c.points_many(["a", "b", "a"])
+    assert out["a"].balance == 5 and out["b"] is None
+    assert len(c.calls) == 1 and len(c.calls[0][2]["json"]) == 2

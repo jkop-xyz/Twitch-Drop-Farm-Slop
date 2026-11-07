@@ -121,6 +121,10 @@ class FakeTwitch:
             return None
         return PointsState(self.balances[login], self.bonus.get(login))
 
+    async def points_many(self, logins: list[str]) -> dict[str, PointsState | None]:
+        self.calls.append("points_many")
+        return {login: await self.points(login) for login in logins}
+
     async def claim_bonus(self, channel_id: str, claim_id: str) -> bool:
         self.claimed_bonuses.append((channel_id, claim_id))
         for login, cid in list(self.bonus.items()):

@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -32,11 +32,34 @@ def _humanize(delta: timedelta) -> str:
     return f"{mins}m"
 
 
+def is_cross_site(request: Request) -> bool:
+    """True if a browser tells us the request came from another site.
+
+    Prefers Sec-Fetch-Site (set by the browser itself, so it survives reverse proxies that
+    rewrite Host). Falls back to comparing Origin with Host. Requests with neither header
+    (curl, scripts) are allowed.
+    """
+    fetch_site = request.headers.get("sec-fetch-site")
+    if fetch_site is not None:
+        return fetch_site not in ("same-origin", "none")
+    origin = request.headers.get("origin")
+    if not origin or origin == "null":
+        return origin == "null"
+    return urlsplit(origin).netloc != request.headers.get("host", "")
+
+
 def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
     app = FastAPI(title="Twitch Drop Bot", lifespan=lifespan, docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     store = farmer.store
+
+    @app.middleware("http")
+    async def reject_cross_site_posts(request: Request, call_next):
+        """The UI has no login (ADR 0001), so stop other websites from submitting its forms."""
+        if request.method == "POST" and is_cross_site(request):
+            return PlainTextResponse("Cross-site request rejected.", status_code=403)
+        return await call_next(request)
 
     def until(dt: datetime | None) -> str:
         if dt is None:
@@ -89,7 +112,8 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
             "slots": slots,
             "channels": channels,
             "week": week,
-            "events": await store.recent_events(limit=20),
+            # Points gains are summarised per channel; listing them would bury the claims.
+            "events": await store.recent_events(limit=20, kinds=["drop", "bonus"]),
             "campaign_names": {c.id: f"{c.game.name}: {c.name}" for c in st.campaigns},
             "selected_count": len(await store.selected_ids()),
         }
@@ -126,9 +150,21 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
         return resp
 
     @app.post("/campaigns/{campaign_id}/select")
-    async def select_campaign(campaign_id: str, selected: str = Form("")):
+    async def select_campaign(request: Request, campaign_id: str, selected: str = Form("")):
         await store.set_selected(campaign_id, selected == "1")
         farmer.wake()
+        campaign = next((c for c in farmer.state.campaigns if c.id == campaign_id), None)
+        if request.headers.get("HX-Request") and campaign is not None:
+            # Swap just this card, so the page doesn't reload and jump to the top.
+            drop_slot = farmer.state.plan.drop_slot
+            return render(
+                request,
+                "_campaign.html",
+                c=campaign,
+                states=await store.campaign_states(),
+                now=farmer.clock(),
+                farming_id=drop_slot.reason.campaign_id if drop_slot else None,
+            )
         return back("/campaigns")
 
     @app.post("/campaigns/refresh")
@@ -167,6 +203,7 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
             checked=checked,
             on_list={c.channel.channel_id for c in channels},
             watched={s.stream.channel_id for s in farmer.state.plan.slots},
+            skipped=farmer.state.skipped,
         )
 
     @app.post("/channels/balances")

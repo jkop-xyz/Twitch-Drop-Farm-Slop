@@ -316,3 +316,74 @@ async def test_failing_minute_watched_reports_get_their_own_notice(farmer, tw):
     tw.spade_error = None
     assert await farmer._send_minute_watched(s)
     assert farmer.state.watch_report_error is None
+
+
+# --- robustness (code review fixes) ------------------------------------------------------
+
+
+async def test_unexpected_error_does_not_stop_the_loop(farmer, tw):
+    await logged_in(farmer)
+    tw.fail_next = RuntimeError("database went away")
+    await farmer.tick()  # must not raise
+    assert farmer.state.status == "running"
+    assert "database went away" in farmer.state.transient_error
+    await farmer.tick()
+    assert farmer.state.transient_error is None
+
+
+async def test_stream_that_keeps_failing_to_watch_is_skipped_for_a_while(farmer, store, tw):
+    await logged_in(farmer)
+    tw.campaign_list = [campaign("c1")]
+    tw.go_live(stream("big", viewers=999))
+    tw.go_live(stream("small", viewers=5))
+    await farmer.tick()
+    await store.set_selected("c1", True)
+    await farmer.tick()
+    assert watching(farmer) == ["big"]
+
+    big = farmer.state.plan.slots[0].stream
+    farmer._record_watch(big, False)
+    farmer._record_watch(big, False)
+    assert "big" not in farmer.state.skipped
+    farmer._record_watch(big, False)
+    assert "big" in farmer.state.skipped
+    await farmer.tick()
+    assert watching(farmer) == ["small"]
+    assert "big" in farmer.state.live  # still shown as live
+
+    farmer.clock.now += timedelta(minutes=11)
+    await farmer.tick()
+    assert watching(farmer) == ["small"]  # current stream is kept while eligible
+    assert farmer.state.skipped == {}
+
+
+async def test_successful_watch_resets_failure_count(farmer, tw):
+    await logged_in(farmer)
+    s = stream("1")
+    farmer._record_watch(s, False)
+    farmer._record_watch(s, False)
+    farmer._record_watch(s, True)
+    farmer._record_watch(s, False)
+    assert farmer.state.skipped == {}
+
+
+async def test_allow_listed_campaign_also_found_through_game_directory(farmer, store, tw):
+    """Allow lists longer than we look up: a live allowed channel beyond the lookup cap."""
+    await logged_in(farmer)
+    tw.campaign_list = [campaign("c1", allowed={"far"})]  # no logins to look up
+    tw.go_live(stream("far", viewers=3))
+    tw.go_live(stream("notallowed", viewers=999))
+    await farmer.tick()
+    await store.set_selected("c1", True)
+    await farmer.tick()
+    assert watching(farmer) == ["far"]
+
+
+async def test_balance_refresh_is_batched(farmer, store, tw):
+    await logged_in(farmer)
+    for cid in ("1", "2", "3"):
+        await store.add_points_channel(cid, f"user{cid}")
+        tw.balances[f"user{cid}"] = 10
+    tw.calls.clear()
+    await farmer.refresh_balances()
+    assert tw.calls.count("points_many") == 1

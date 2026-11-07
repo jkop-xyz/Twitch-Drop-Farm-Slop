@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import re
@@ -391,15 +392,24 @@ class TwitchClient:
         result = data.get("claimDropRewards") or {}
         return result.get("status") in ("ELIGIBLE_FOR_ALL", "DROP_INSTANCE_ALREADY_CLAIMED")
 
-    async def points(self, login: str) -> PointsState | None:
-        data = await self._gql_data(protocol.gql_op("ChannelPointsContext", channelLogin=login))
+    @staticmethod
+    def _points_state(data: Json) -> PointsState | None:
         if not data.get("community") or not data["community"].get("channel"):
             return None
-        try:
-            balance, claim = parse.parse_points_context(data)
-        except (KeyError, TypeError) as e:
-            raise ProtocolError("ChannelPointsContext", repr(e)) from e
+        balance, claim = parse.parse_points_context(data)
         return PointsState(balance, claim)
+
+    async def points(self, login: str) -> PointsState | None:
+        data = await self._gql_data(protocol.gql_op("ChannelPointsContext", channelLogin=login))
+        return self._points_state(data)
+
+    async def points_many(self, logins: list[str]) -> dict[str, PointsState | None]:
+        """Balances for many channels, batched (GQL_BATCH per request)."""
+        logins = list(dict.fromkeys(logins))
+        datas = await self._gql_batch(
+            [protocol.gql_op("ChannelPointsContext", channelLogin=x) for x in logins]
+        )
+        return {login: self._points_state(d) for login, d in zip(logins, datas, strict=True)}
 
     async def claim_bonus(self, channel_id: str, claim_id: str) -> bool:
         data = await self._gql_data(
@@ -409,3 +419,34 @@ class TwitchClient:
         )
         result = data.get("claimCommunityPoints")
         return bool(result) and not result.get("error")
+
+
+def _shape_checked(name: str, fn):
+    """A KeyError/TypeError/IndexError while reading a response means Twitch changed its shape."""
+
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await fn(*args, **kwargs)
+        except (KeyError, TypeError, IndexError) as e:
+            raise ProtocolError(name, f"unexpected response shape: {e!r}") from e
+
+    return wrapper
+
+
+for _name in (
+    "validate",
+    "campaigns",
+    "live_streams",
+    "game_streams",
+    "lookup_user",
+    "followed_channels",
+    "watch",
+    "send_minute_watched",
+    "current_drop",
+    "claim_drop",
+    "points",
+    "points_many",
+    "claim_bonus",
+):
+    setattr(TwitchClient, _name, _shape_checked(_name, getattr(TwitchClient, _name)))

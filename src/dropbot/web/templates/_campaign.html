@@ -1,0 +1,42 @@
+{# One campaign card. Rendered inside campaigns.html and on its own after (de)selecting. #}
+{% set st = states.get(c.id) %}
+{% set selected = st and st.selected %}
+<div class="panel campaign"
+  data-search="{{ (c.name ~ ' ' ~ (c.drops | map(attribute='rewards') | map('join', ' ') | join(' ')) ~ ' ' ~ (c.drops | map(attribute='name') | join(' '))) | lower }}">
+  <form method="post" action="/campaigns/{{ c.id }}/select" class="row" style="align-items:flex-start"
+    hx-post="/campaigns/{{ c.id }}/select" hx-target="closest .campaign" hx-swap="outerHTML">
+    <input type="hidden" name="selected" value="{{ '' if selected else '1' }}">
+    <button class="{{ 'primary' if selected }}" title="{{ 'Deselect' if selected else 'Select' }}">
+      {{ "✓ Selected" if selected else "Select" }}</button>
+    <div style="flex:1; min-width: 10rem">
+      <strong>{{ c.name }}</strong>
+      <div class="row small" style="margin-top:.2rem">
+        {% if st and not st.seen %}<span class="badge new">new</span>{% endif %}
+        {% if c.id == farming_id %}<span class="badge ok">farming now</span>{% endif %}
+        {% if not c.running(now) and not c.ended(now) %}<span class="badge">starts {{ c.starts_at | until }}</span>{% endif %}
+        {% if c.ended(now) %}<span class="badge">ended: claim window</span>{% endif %}
+        {% if not c.link_ok %}<span class="badge warn">no account linked</span>{% endif %}
+        {% if c.allowed_channel_ids is not none %}<span class="badge">{{ c.allowed_channel_ids | length }} channels only</span>{% endif %}
+      </div>
+      <div class="muted small">ends {{ c.ends_at | until }}</div>
+    </div>
+  </form>
+  {% if not c.link_ok %}
+    <p class="small" style="margin:.5rem 0 0; color: var(--warn)">
+      No game account is linked, so this won't be farmed even if selected.
+      {% if c.link_url.startswith("https://") %}<a href="{{ c.link_url }}" target="_blank" rel="noopener">Link your account</a>.{% endif %}
+    </p>
+  {% endif %}
+  <table class="small" style="margin-top:.5rem">
+  {% for d in c.drops %}
+    <tr>
+      <td>{{ d.rewards | join(", ") or d.name }}</td>
+      <td class="num" style="white-space:nowrap">
+        {% if d.claimed %}<span class="badge ok">claimed</span>
+        {% elif not d.farmable_by_watching %}<span class="badge">not farmable by watching</span>
+        {% else %}{{ d.current_minutes }}/{{ d.required_minutes }} min{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </table>
+</div>

@@ -9,9 +9,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
+COPY requirements.lock ./
+RUN pip install -r requirements.lock
 COPY pyproject.toml ./
 COPY src ./src
-RUN pip install . && useradd --uid 1000 --create-home bot && mkdir -p /data && chown bot /data
+RUN pip install --no-deps . && useradd --uid 1000 --create-home bot && mkdir -p /data && chown bot /data
 
 USER bot
 VOLUME /data

@@ -33,7 +33,8 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: pip install -e '.[dev]'
+          cache-dependency-path: requirements.lock
+      - run: pip install -r requirements.lock -e '.[dev]'
       - run: ruff check src tests
       - run: ruff format --check src tests
       - name: Tests (SQLite + Postgres)

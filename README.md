@@ -76,7 +76,10 @@ python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/ruff check src tests && .venv/bin/ruff format --check src tests
 DATABASE_URL=sqlite:///./dev.db .venv/bin/python -m dropbot
 docker compose up --build                # build the image locally
+./scripts/lock.sh                        # after changing dependencies: re-pin requirements.lock
 ```
+
+Runtime dependencies are pinned in `requirements.lock`, which the image and CI install from, so builds are reproducible.
 
 | Path | What |
 |---|---|

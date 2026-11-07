@@ -46,6 +46,7 @@
     <td class="small">
       {% if s %}<span class="dot live"></span>live <span class="muted">· {{ s.game_name }}</span>
         {% if c.channel.channel_id in watched %} <span class="badge ok">watching</span>{% endif %}
+        {% if c.channel.channel_id in skipped %} <span class="badge warn" title="Watching kept failing (sub-only, region-locked, ...). Retrying {{ skipped[c.channel.channel_id] | until }}.">can't watch, skipped</span>{% endif %}
       {% else %}<span class="dot"></span><span class="muted">offline</span>{% endif %}
     </td>
     <td class="num">{{ c.balance | num }}

@@ -22,6 +22,10 @@ TICK = timedelta(seconds=60)
 CAMPAIGN_REFRESH = timedelta(minutes=15)
 # Balances of Points Channels that aren't being watched are refreshed this often.
 BALANCE_REFRESH = timedelta(minutes=30)
+# A stream that fails to watch this many times in a row is skipped for SKIP_FOR
+# (sub-only, geo-blocked, broken playlist...), so the Scheduler picks another one.
+WATCH_FAIL_LIMIT = 3
+SKIP_FOR = timedelta(minutes=10)
 # Cap on allowed-channel lookups per campaign per tick.
 MAX_ALLOWED_LOOKUPS = 100
 
@@ -41,6 +45,8 @@ class FarmerState:
     protocol_error_at: datetime | None = None
     transient_error: str | None = None
     watch_report_error: str | None = None
+    # Channels that kept failing to watch, skipped until the given time.
+    skipped: dict[str, datetime] = field(default_factory=dict)
     # Channel Points balance on each currently watched stream, by channel id.
     slot_balances: dict[str, int] = field(default_factory=dict)
     balances_at: datetime | None = None
@@ -69,6 +75,7 @@ class Farmer:
         self._force_campaigns = True
         self._lock = asyncio.Lock()
         self._tasks: list[asyncio.Task] = []
+        self._watch_failures: dict[str, int] = {}
 
     # --- lifecycle -------------------------------------------------------------------------
 
@@ -172,15 +179,37 @@ class Farmer:
         last_spade: dict[str, float] = {}
         loop = asyncio.get_running_loop()
         while True:
-            if self.farming:
-                now = loop.time()
-                for slot in self.state.plan.slots:
-                    s = slot.stream
-                    await self._guard(self.twitch.watch(s))
-                    if now - last_spade.get(s.broadcast_id, 0) >= SPADE_INTERVAL_S:
-                        if await self._send_minute_watched(s):
-                            last_spade[s.broadcast_id] = now
+            try:
+                if self.farming:
+                    now = loop.time()
+                    for slot in self.state.plan.slots:
+                        s = slot.stream
+                        ok = await self._guard(self.twitch.watch(s))
+                        if ok is not None:
+                            self._record_watch(s, ok)
+                        if now - last_spade.get(s.broadcast_id, 0) >= SPADE_INTERVAL_S:
+                            if await self._send_minute_watched(s):
+                                last_spade[s.broadcast_id] = now
+                    # Forget broadcasts we no longer watch.
+                    current = {sl.stream.broadcast_id for sl in self.state.plan.slots}
+                    last_spade = {k: v for k, v in last_spade.items() if k in current}
+            except Exception as e:  # never let the watch loop die
+                log.exception("watch loop error")
+                self.state.transient_error = f"Unexpected error while watching: {e!r}"
             await asyncio.sleep(WATCH_INTERVAL_S)
+
+    def _record_watch(self, stream: Stream, ok: bool) -> None:
+        cid = stream.channel_id
+        if ok:
+            self._watch_failures.pop(cid, None)
+            return
+        n = self._watch_failures.get(cid, 0) + 1
+        self._watch_failures[cid] = n
+        if n >= WATCH_FAIL_LIMIT:
+            self._watch_failures.pop(cid, None)
+            self.state.skipped[cid] = self.clock() + SKIP_FOR
+            log.warning("can't watch %s, skipping it for %s", stream.name, SKIP_FOR)
+            self.wake()
 
     async def _send_minute_watched(self, stream: Stream) -> bool:
         """Minute-watched reports fail on their own (e.g. a DNS blocker on spade.twitch.tv).
@@ -235,6 +264,9 @@ class Farmer:
             except TransientError as e:
                 self.state.transient_error = str(e)
                 log.warning("tick failed, retrying next tick: %s", e)
+            except Exception as e:  # e.g. the database went away; never let the loop die
+                log.exception("unexpected error during tick")
+                self.state.transient_error = f"Unexpected error: {e!r}"
 
     async def _tick(self) -> None:
         now = self.clock()
@@ -259,22 +291,28 @@ class Farmer:
         for c in farmable:
             logins += list(c.allowed_logins[:MAX_ALLOWED_LOOKUPS])
         live = await self.twitch.live_streams(logins)
-        for c in farmable:
-            if c.allowed_channel_ids is None:
-                for s in await self.twitch.game_streams(c.game):
-                    live.setdefault(s.channel_id, s)
+        # The game directory also covers campaigns whose allow list is longer than we look up;
+        # the Scheduler only accepts streams the campaign allows.
+        for game in {c.game for c in farmable}:
+            for s in await self.twitch.game_streams(game):
+                live.setdefault(s.channel_id, s)
         st.live = live
+
+        st.skipped = {cid: until for cid, until in st.skipped.items() if until > now}
+        watchable = {cid: s for cid, s in live.items() if cid not in st.skipped}
 
         current = st.plan.drop_slot.stream.channel_id if st.plan.drop_slot else None
         new_plan = plan(
-            Snapshot(now, st.campaigns, selected, live, points_channels, current, self.slots)
+            Snapshot(now, st.campaigns, selected, watchable, points_channels, current, self.slots)
         )
 
         if new_plan.drop_slot:
             await self._update_drop_progress(new_plan.drop_slot)
             # Progress may have finished a Drop: plan again so it gets claimed this tick.
             new_plan = plan(
-                Snapshot(now, st.campaigns, selected, live, points_channels, current, self.slots)
+                Snapshot(
+                    now, st.campaigns, selected, watchable, points_channels, current, self.slots
+                )
             )
 
         claimed_any = False
@@ -295,7 +333,9 @@ class Farmer:
         if claimed_any:
             # Claims can finish a campaign or unlock the next Drop: plan once more.
             new_plan = plan(
-                Snapshot(now, st.campaigns, selected, live, points_channels, current, self.slots)
+                Snapshot(
+                    now, st.campaigns, selected, watchable, points_channels, current, self.slots
+                )
             )
 
         if new_plan.deselect:
@@ -327,10 +367,12 @@ class Farmer:
 
     async def _refresh_balances(self, channels: list[PointsChannel]) -> int:
         """Store current balances without recording gains (the bot didn't earn these)."""
+        if not channels:
+            return 0
+        states = await self.twitch.points_many([p.login for p in channels])
         n = 0
         for p in channels:
-            state = await self.twitch.points(p.login)
-            if state is not None:
+            if (state := states.get(p.login)) is not None:
                 await self.store.set_balance(p.channel_id, state.balance)
                 n += 1
         return n

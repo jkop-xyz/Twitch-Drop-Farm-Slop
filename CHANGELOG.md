@@ -6,6 +6,21 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-07
+
+A redesigned web UI, account data that's kept per Twitch account, and security hardening.
+
+### Changed
+- **Redesigned web UI.**
+  - Header: logo and favicon, a live status pill ("Farming", "Idle", "Paused", "Logged out") on every page, and icon navigation that shortens on phones.
+  - Dashboard: a stats row, Watch Slot cards with reward art, a bolder progress bar with time left, and a compact activity feed.
+  - Campaigns: box art, toggle switches, reward images with progress per Drop, filter chips (Selected, Not selected, Needs account link) and a consistent grid.
+  - Points Channels: avatars, lighter rows, icon buttons that show on hover, a totals row, and a layout that fits on phones.
+  - Friendlier time labels ("just now", "3h ago") and better dark-mode contrast.
+- The image is built in two stages: only the installed wheel ships, with no source tree or build leftovers.
+- `requirements.lock` is renamed `requirements.txt`, so Dependabot recognises it.
+- Dependabot keeps the Python dependencies, GitHub Actions and the Docker base image up to date with weekly grouped PRs. Dependabot alerts and automatic security-fix PRs are enabled for known CVEs.
+
 ### Fixed
 - **Account data is now kept per Twitch account.**
   - Points Channels, balances, claim history and campaign selections belong to the account that made them.
@@ -18,16 +33,10 @@ Versioning: [SemVer](https://semver.org/).
 - Added `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`, so the bot's LAN address isn't sent to sites the UI links to.
 - The OpenAPI schema (`/openapi.json`) is no longer exposed.
 
-### Changed
-- **Redesigned web UI.**
-  - Header: logo and favicon, a live status pill ("Farming", "Idle", "Paused", "Logged out") on every page, and icon navigation that shortens on phones.
-  - Dashboard: a stats row, Watch Slot cards with reward art, a bolder progress bar with time left, and a compact activity feed.
-  - Campaigns: box art, toggle switches, reward images with progress per Drop, filter chips (Selected, Not selected, Needs account link) and a consistent grid.
-  - Points Channels: avatars, lighter rows, icon buttons that show on hover, a totals row, and a layout that fits on phones.
-  - Friendlier time labels ("just now", "3h ago") and better dark-mode contrast.
-- The image is built in two stages: only the installed wheel ships, with no source tree or build leftovers.
-- `requirements.lock` is renamed `requirements.txt`, so Dependabot recognises it.
-- Dependabot keeps the Python dependencies, GitHub Actions and the Docker base image up to date with weekly grouped PRs. Dependabot alerts and automatic security-fix PRs are enabled for known CVEs.
+### Upgrade notes
+- The database migrates automatically on startup (migration `0002`).
+  - Existing Points Channels, history and selections go to the stored account, or to the next account that logs in.
+  - The migration rebuilds two tables, so back up `/data/bot.db` (or your Postgres database) first.
 
 ## [0.1.0] - 2026-11-07
 

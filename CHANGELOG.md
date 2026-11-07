@@ -6,6 +6,14 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- Added anti-framing headers (`X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`). Without them, another site could frame the UI and trick clicks past the cross-site check.
+- Added `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`, so the bot's LAN address isn't sent to sites the UI links to.
+- The OpenAPI schema (`/openapi.json`) is no longer exposed.
+
+### Changed
+- The image is built in two stages: only the installed wheel ships, with no source tree or build leftovers.
+
 ## [0.1.0] - 2026-11-07
 
 First release. AI-generated; see the README.

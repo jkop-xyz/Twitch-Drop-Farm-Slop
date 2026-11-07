@@ -229,3 +229,13 @@ async def test_account_link_url_must_be_https(env):
     tw.campaign_list = [replace(campaign("c1", linked=False), link_url="javascript:alert(1)")]
     await farmer.tick()
     assert "javascript:" not in (await c.get("/campaigns")).text
+
+
+async def test_security_headers_and_no_api_schema(env):
+    _, _, _, c = env
+    r = await c.get("/")
+    assert r.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["referrer-policy"] == "no-referrer"
+    assert (await c.get("/openapi.json")).status_code == 404

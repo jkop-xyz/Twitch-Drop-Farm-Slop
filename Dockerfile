@@ -1,3 +1,10 @@
+# Build stage: turn the source into a wheel, so no source tree or build leftovers ship.
+FROM python:3.13-slim AS build
+WORKDIR /src
+COPY pyproject.toml ./
+COPY src ./src
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels .
+
 FROM python:3.13-slim
 
 LABEL org.opencontainers.image.source="https://github.com/jkop-xyz/Twitch-Drop-Farm-Slop" \
@@ -8,12 +15,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-WORKDIR /app
-COPY requirements.lock ./
-RUN pip install -r requirements.lock
-COPY pyproject.toml ./
-COPY src ./src
-RUN pip install --no-deps .
+COPY requirements.lock /tmp/requirements.lock
+RUN pip install -r /tmp/requirements.lock && rm /tmp/requirements.lock
+COPY --from=build /wheels /tmp/wheels
+RUN pip install --no-deps /tmp/wheels/*.whl && rm -r /tmp/wheels
 
 # Rootless by default: a fixed, numeric, unprivileged uid (so `runAsNonRoot` can verify it),
 # and a /data owned by group 0 so any uid run with `--user <uid>:0` can still write to it.
@@ -22,6 +27,7 @@ RUN useradd --system --uid 10001 --gid 0 --home-dir /data --no-create-home --she
 
 USER 10001:0
 ENV HOME=/data
+WORKDIR /data
 VOLUME /data
 ENV PORT=8080
 EXPOSE 8080

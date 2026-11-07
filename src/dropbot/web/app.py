@@ -32,6 +32,17 @@ def _humanize(delta: timedelta) -> str:
     return f"{mins}m"
 
 
+SECURITY_HEADERS = {
+    # No framing: otherwise another site could overlay the UI and trick clicks (clickjacking),
+    # which would also get past the cross-site POST check.
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    # Don't leak the bot's LAN address to Twitch or anywhere else when following links.
+    "Referrer-Policy": "no-referrer",
+}
+
+
 def is_cross_site(request: Request) -> bool:
     """True if a browser tells us the request came from another site.
 
@@ -49,7 +60,9 @@ def is_cross_site(request: Request) -> bool:
 
 
 def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
-    app = FastAPI(title="Twitch Drop Bot", lifespan=lifespan, docs_url=None, redoc_url=None)
+    app = FastAPI(
+        title="Twitch Drop Bot", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
+    )
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     store = farmer.store
@@ -59,7 +72,9 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
         """The UI has no login (ADR 0001), so stop other websites from submitting its forms."""
         if request.method == "POST" and is_cross_site(request):
             return PlainTextResponse("Cross-site request rejected.", status_code=403)
-        return await call_next(request)
+        response = await call_next(request)
+        response.headers.update(SECURITY_HEADERS)
+        return response
 
     def until(dt: datetime | None) -> str:
         if dt is None:

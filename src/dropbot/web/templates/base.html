@@ -155,6 +155,8 @@ td.num, th.num { text-align: right; }
   place-items: center; font-weight: 700; font-size: .78rem; color: #fff; text-transform: uppercase;
   background: linear-gradient(135deg, hsl(var(--h) 70% 60%), hsl(calc(var(--h) + 35) 65% 45%)); }
 .avatar.sm { width: 1.6rem; height: 1.6rem; font-size: .68rem; }
+.avatar { position: relative; overflow: hidden; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .who { display: flex; align-items: center; gap: .6rem; min-width: 0; }
 .who .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar { height: 8px; background: var(--line-2); border-radius: 999px; overflow: hidden; }

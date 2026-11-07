@@ -51,6 +51,8 @@ class FarmerState:
     slot_balances: dict[str, int] = field(default_factory=dict)
     # Watched channels (by id) that have Channel Points turned off.
     slot_points_off: set[str] = field(default_factory=set)
+    # Profile pictures of watched channels, by channel id (Points Channels' are also stored).
+    avatars: dict[str, str] = field(default_factory=dict)
     balances_at: datetime | None = None
     campaigns: list[Campaign] = field(default_factory=list)
     campaigns_at: datetime | None = None
@@ -176,6 +178,7 @@ class Farmer:
         st.live = {}
         st.slot_balances = {}
         st.slot_points_off = set()
+        st.avatars = {}
         st.skipped = {}
         st.balances_at = None
         st.transient_error = None
@@ -390,11 +393,14 @@ class Farmer:
             if s.stream.channel_id in st.slot_balances
         }
         st.slot_points_off = set()
+        st.avatars = {}
         for slot in new_plan.slots:
             if slot.stream.channel_id in points_ids:
                 await self._farm_points(slot.stream)
             elif (pts := await self.twitch.points(slot.stream.login)) is not None:
                 # A Drop-only stream: show the balance, but don't claim or record anything.
+                if pts.avatar_url:
+                    st.avatars[slot.stream.channel_id] = pts.avatar_url
                 if pts.enabled:
                     st.slot_balances[slot.stream.channel_id] = pts.balance
                 else:
@@ -415,7 +421,7 @@ class Farmer:
         n = 0
         for p in channels:
             if (state := states.get(p.login)) is not None:
-                await self.store.set_points_enabled(p.channel_id, state.enabled)
+                await self.store.set_points_enabled(p.channel_id, state.enabled, state.avatar_url)
                 if state.enabled:
                     await self.store.set_balance(p.channel_id, state.balance)
                 n += 1
@@ -464,7 +470,9 @@ class Farmer:
         state = await self.twitch.points(stream.login)
         if state is None:
             return
-        await self.store.set_points_enabled(stream.channel_id, state.enabled)
+        await self.store.set_points_enabled(stream.channel_id, state.enabled, state.avatar_url)
+        if state.avatar_url:
+            self.state.avatars[stream.channel_id] = state.avatar_url
         if not state.enabled:
             # Turned off since the last check. Planning leaves it out from the next tick on.
             self.state.slot_points_off.add(stream.channel_id)

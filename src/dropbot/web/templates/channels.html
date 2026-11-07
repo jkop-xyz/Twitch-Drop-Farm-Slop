@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import avatar %}
 {% block title %}Points Channels · Drop Farm{% endblock %}
 {% block content %}
 <style>
@@ -73,7 +74,7 @@ tbody tr.saved td { animation: saved 1s ease-out; }
       {% elif not checked.points %}<strong>{{ checked.user.display_name or checked.user.login }}</strong><span class="muted">has no Channel Points.</span>
       {% elif not checked.points.enabled %}<strong>{{ checked.user.display_name or checked.user.login }}</strong><span class="muted">has Channel Points turned off. Watching there earns none.</span>
       {% else %}
-        <span class="avatar sm" style="--h: {{ checked.user.login | hue }}">{{ (checked.user.display_name or checked.user.login)[:1] }}</span>
+        {{ avatar(checked.user.login, checked.user.display_name or checked.user.login, checked.points.avatar_url) }}
         <span>You have <strong class="num">{{ checked.points.balance | num }}</strong> on <strong>{{ checked.user.display_name or checked.user.login }}</strong></span>
         {% if checked.points.bonus_claim_id %}<span class="badge ok">Bonus Chest available</span>{% endif %}
         {% if checked.user.channel_id not in on_list %}
@@ -97,7 +98,7 @@ tbody tr.saved td { animation: saved 1s ease-out; }
     <td class="grab"><button type="button" class="handle" title="Drag to reorder (or focus and use the arrow keys)" aria-label="Reorder {{ c.channel.name }}"><svg class="i"><use href="#i-grip"/></svg></button></td>
     <td class="rank">{{ loop.index }}</td>
     <td><div class="who"><span class="dot {{ 'live' if s }}"></span>
-      <span class="avatar sm" style="--h: {{ c.channel.login | hue }}">{{ c.channel.name[:1] }}</span>
+      {{ avatar(c.channel.login, c.channel.name, c.avatar_url) }}
       <div><a class="name" href="https://www.twitch.tv/{{ c.channel.login }}" target="_blank" rel="noopener">{{ c.channel.name }}</a>
         {% if c.channel.points_off %}<span class="off-note"><svg class="i"><use href="#i-alert"/></svg> Channel Points are turned off here. Only watched for Drops.</span>{% endif %}</div></div></td>
     <td class="col-status">

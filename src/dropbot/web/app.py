@@ -132,6 +132,8 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
     async def dashboard_ctx() -> dict:
         st = farmer.state
         campaigns = {c.id: c for c in st.campaigns}
+        channels = await store.points_channel_info()
+        avatars = {c.channel.channel_id: c.avatar_url for c in channels if c.avatar_url}
         slots = []
         for s in st.plan.slots:
             entry = {
@@ -141,6 +143,8 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
                 "points": not isinstance(s.reason, DropReason) or s.reason.also_points,
                 "balance": st.slot_balances.get(s.stream.channel_id),
                 "points_off": s.stream.channel_id in st.slot_points_off,
+                "avatar_url": st.avatars.get(s.stream.channel_id)
+                or avatars.get(s.stream.channel_id),
             }
             if isinstance(s.reason, DropReason) and (c := campaigns.get(s.reason.campaign_id)):
                 entry["campaign"] = c
@@ -150,7 +154,6 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
                 )
             slots.append(entry)
         week = await store.points_gained_since(farmer.clock() - timedelta(days=7))
-        channels = await store.points_channel_info()
         return {
             "slots": slots,
             "channels": channels,

@@ -26,7 +26,10 @@ class FakeTwitch:
         self.users: dict[str, UserInfo] = {}  # by login
         self.follows: list[UserInfo] = []
         self.balances: dict[str, int] = {}  # by login
-        self.points_off: set[str] = set()  # logins with Channel Points turned off
+        self.points_off: set[str] = set()
+        self.avatars: dict[
+            str, str
+        ] = {}  # login -> profile picture URL  # logins with Channel Points turned off
         self.bonus: dict[str, str] = {}  # login -> claim id
         self.drop_sessions: dict[str, DropSession] = {}  # channel id -> session
         self.claimed_drops: list[tuple[str, str]] = []
@@ -120,9 +123,10 @@ class FakeTwitch:
     async def points(self, login: str) -> PointsState | None:
         if login not in self.balances:
             return None
+        pic = self.avatars.get(login)
         if login in self.points_off:
-            return PointsState(self.balances[login], None, enabled=False)
-        return PointsState(self.balances[login], self.bonus.get(login))
+            return PointsState(self.balances[login], None, enabled=False, avatar_url=pic)
+        return PointsState(self.balances[login], self.bonus.get(login), avatar_url=pic)
 
     async def points_many(self, logins: list[str]) -> dict[str, PointsState | None]:
         self.calls.append("points_many")

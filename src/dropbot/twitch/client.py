@@ -406,7 +406,8 @@ class TwitchClient:
     def _points_state(data: Json) -> PointsState | None:
         if not data.get("community") or not data["community"].get("channel"):
             return None
-        return PointsState(*parse.parse_points_context(data))
+        avatar = data["community"].get("profileImageURL") or None
+        return PointsState(*parse.parse_points_context(data), avatar_url=avatar)
 
     async def points(self, login: str) -> PointsState | None:
         data = await self._gql_data(protocol.gql_op("ChannelPointsContext", channelLogin=login))

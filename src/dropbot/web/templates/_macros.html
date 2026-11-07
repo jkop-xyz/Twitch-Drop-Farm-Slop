@@ -1,0 +1,6 @@
+{# A channel avatar: the profile picture when known, over a coloured initial that shows
+   while it loads, when there's no picture, or when it fails to load. #}
+{% macro avatar(login, name, url=None, size="sm") -%}
+<span class="avatar{{ ' ' ~ size if size }}" style="--h: {{ login | hue }}">{{ name[:1] }}
+{%- if url %}<img src="{{ url }}" alt="" loading="lazy" decoding="async" onerror="this.remove()">{% endif %}</span>
+{%- endmacro %}

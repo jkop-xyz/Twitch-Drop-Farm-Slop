@@ -1,3 +1,4 @@
+{% from "_macros.html" import avatar %}
 {% if partial %}{% set oob = true %}{% include "_status_pill.html" %}{% endif %}
 <style>
 .stats { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
@@ -52,7 +53,7 @@
 {% for s in slots %}
   <div class="panel slot">
     <div class="slot-top">
-      <span class="avatar" style="--h: {{ s.stream.login | hue }}">{{ s.stream.name[:1] }}</span>
+      {{ avatar(s.stream.login, s.stream.name, s.avatar_url, size="") }}
       <div class="meta">
         <div class="title"><span class="dot live"></span>
           <a href="https://www.twitch.tv/{{ s.stream.login }}" target="_blank" rel="noopener" style="color:inherit">{{ s.stream.name }}</a></div>
@@ -112,7 +113,7 @@
   {% for c in channels %}
   <tr{% if c.channel.points_off %} class="points-off" title="Channel Points are turned off on this channel"{% endif %}>
     <td><div class="who"><span class="dot {{ 'live' if c.channel.channel_id in state.live }}"></span>
-      <span class="avatar sm" style="--h: {{ c.channel.login | hue }}">{{ c.channel.name[:1] }}</span>
+      {{ avatar(c.channel.login, c.channel.name, c.avatar_url) }}
       <span class="name">{{ c.channel.name }}</span></div></td>
     <td class="num">{% if c.channel.points_off %}<span class="tiny">points off</span>{% else %}{{ c.balance | num }}{% endif %}</td>
     <td class="num">{% if week.get(c.channel.channel_id) %}<span style="color:var(--ok)">+{{ week[c.channel.channel_id] | num }}</span>{% else %}<span class="faint">–</span>{% endif %}</td>

@@ -56,6 +56,8 @@ class PointsState:
     # False when the streamer has Channel Points turned off (or can't have them: not an
     # affiliate or partner). Watching such a channel earns nothing.
     enabled: bool = True
+    # The channel's profile picture (70x70), when Twitch sends one.
+    avatar_url: str | None = None
 
 
 class TwitchApi(Protocol):

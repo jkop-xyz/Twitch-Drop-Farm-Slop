@@ -372,7 +372,15 @@ async def test_points_many_is_batched():
     c = Scripted((200, [ctx(5), {"data": {"community": None}}]))
     out = await c.points_many(["a", "b", "a"])
     assert out["a"].balance == 5 and out["b"] is None
+    assert out["a"].avatar_url is None  # not in this response
     assert len(c.calls) == 1 and len(c.calls[0][2]["json"]) == 2
+
+
+async def test_points_carry_the_channel_avatar():
+    pic = "https://static-cdn.jtvnw.net/jtv_user_pictures/x-profile_image-70x70.png"
+    channel = {"self": {"communityPoints": {"balance": 3, "availableClaim": None}}}
+    c = Scripted((200, {"data": {"community": {"profileImageURL": pic, "channel": channel}}}))
+    assert (await c.points("a")).avatar_url == pic
 
 
 async def test_minute_watched_reports_the_web_player():

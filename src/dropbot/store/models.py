@@ -52,6 +52,7 @@ class PointsChannelRow(Base):
     balance_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Whether the channel has Channel Points turned on. None until the bot has checked.
     points_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
 
 class EventRow(Base):

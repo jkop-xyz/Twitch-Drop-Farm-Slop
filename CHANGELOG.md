@@ -6,6 +6,19 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-07
+
+Channel profile pictures.
+
+### Added
+- **Channel profile pictures** in the Points Channels list, the dashboard's Watch Slots and Channel Points table, and the balance check. They come with the balance lookup the bot already makes, so there are no extra requests to Twitch.
+  - Watch Slots on Drop-only streams that aren't on your list get a picture too.
+  - Channels without a picture, or whose picture fails to load, keep the coloured letter avatar.
+  - Channels with Channel Points turned off show their picture in grayscale.
+
+### Upgrade notes
+- Migration `0004` adds one column to the Points Channels table and runs automatically on startup. Every channel is looked up once on the first round after the upgrade, which fills in the pictures.
+
 ## [0.4.1] - 2026-11-07
 
 Watching now earns Channel Points again.

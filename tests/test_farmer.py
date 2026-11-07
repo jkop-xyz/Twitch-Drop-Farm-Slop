@@ -278,6 +278,21 @@ async def test_channel_turning_points_off_is_dropped_and_turning_on_again_is_pic
     assert watching(farmer) == ["1", "2"]
 
 
+async def test_channel_avatars_are_stored_and_shown_for_watched_streams(farmer, store, tw):
+    await logged_in(farmer)
+    tw.go_live(stream("1"))
+    tw.balances["user1"] = 5
+    tw.avatars["user1"] = "https://static-cdn.jtvnw.net/a.png"
+    await store.add_points_channel("1", "user1")
+    await farmer.tick()
+    [info] = await store.points_channel_info()
+    assert info.avatar_url == "https://static-cdn.jtvnw.net/a.png"
+    assert farmer.state.avatars == {"1": "https://static-cdn.jtvnw.net/a.png"}
+    tw.avatars.clear()  # a later lookup without a picture keeps the stored one
+    await farmer.refresh_balances()
+    assert (await store.points_channel_info())[0].avatar_url == "https://static-cdn.jtvnw.net/a.png"
+
+
 async def test_unknown_channel_is_checked_only_once_per_session(farmer, store, tw):
     await logged_in(farmer)
     await store.add_points_channel("9", "gone")  # Twitch returns nothing for it

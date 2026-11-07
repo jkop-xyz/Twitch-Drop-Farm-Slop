@@ -77,6 +77,7 @@ class PointsChannelInfo:
     channel: PointsChannel
     balance: int | None
     balance_at: datetime | None
+    avatar_url: str | None = None
 
 
 class Store:
@@ -271,6 +272,7 @@ class Store:
                     PointsChannel(r.channel_id, r.login, r.display_name, r.rank, r.points_enabled),
                     r.balance,
                     _utc(r.balance_at),
+                    r.avatar_url,
                 )
                 for r in rows
             ]
@@ -334,11 +336,16 @@ class Store:
             row.balance_at = datetime.now(UTC)
             return prev
 
-    async def set_points_enabled(self, channel_id: str, enabled: bool) -> None:
+    async def set_points_enabled(
+        self, channel_id: str, enabled: bool, avatar_url: str | None = None
+    ) -> None:
+        """Store what the last points lookup said about a channel (avatar kept if not sent)."""
         async with self._session.begin() as s:
             row = await s.get(PointsChannelRow, (self._uid(), channel_id))
             if row is not None:
                 row.points_enabled = enabled
+                if avatar_url:
+                    row.avatar_url = avatar_url
 
     # --- Claim history ---------------------------------------------------------------------
 

@@ -86,3 +86,92 @@ async def test_claim_history_and_points_summary(store):
     recent = await store.recent_events(limit=10)
     assert recent[0].kind == "drop" and recent[0].at.tzinfo is not None
     assert [e.kind for e in await store.recent_events(kinds=["drop"])] == ["drop"]
+
+
+# --- per-account data --------------------------------------------------------------------
+
+
+async def test_data_is_scoped_per_account(store):
+    from dropbot.store import NoAccount
+
+    await store.add_points_channel("1", "a")
+    await store.observe_campaigns([campaign("c1")])
+    await store.set_selected("c1", True)
+    await store.record("drop", campaign_id="c1")
+
+    store.use_account("u2")
+    assert await store.points_channels() == []
+    assert await store.selected_ids() == frozenset()
+    assert await store.count_events("drop") == 0
+    assert await store.add_points_channel("1", "a")  # same channel, other account: allowed
+    await store.observe_campaigns([campaign("c1")])
+    assert not (await store.campaign_states())["c1"].selected
+
+    store.use_account(None)
+    assert await store.points_channel_info() == []
+    assert await store.campaign_states() == {}
+    assert await store.recent_events() == []
+    assert await store.points_gained_since(datetime.now(UTC) - timedelta(days=1)) == {}
+    import pytest
+
+    with pytest.raises(NoAccount):
+        await store.add_points_channel("9", "z")
+
+    store.use_account("u1")
+    assert [p.login for p in await store.points_channels()] == ["a"]
+    assert await store.selected_ids() == {"c1"}
+    assert await store.count_events("drop") == 1
+
+
+async def test_migration_assigns_existing_data_to_stored_account(tmp_path):
+    """A database from before per-account data keeps everything for the logged-in account."""
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import text
+
+    from dropbot.store import Store
+
+    s = Store(f"sqlite:///{tmp_path}/old.db")
+    cfg = Config()
+    cfg.set_main_option("script_location", "dropbot:migrations")
+
+    def to_0001(conn):
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "0001")
+
+    async with s.engine.begin() as conn:
+        await conn.run_sync(to_0001)
+        now = "2026-11-01 00:00:00"
+        await conn.execute(
+            text(
+                "INSERT INTO account (id, access_token, user_id, login, display_name, device_id, updated_at)"
+                f" VALUES (1, 'tok', '777', 'me', 'Me', 'dev', '{now}')"
+            )
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO points_channel (channel_id, login, display_name, rank, balance)"
+                " VALUES ('5', 'streamer', 'Streamer', 0, 1234)"
+            )
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO campaign_state (campaign_id, name, game_name, first_seen_at, seen, selected)"
+                f" VALUES ('c1', 'C', 'G', '{now}', 1, 1)"
+            )
+        )
+        await conn.execute(
+            text(
+                f"INSERT INTO event (at, kind, channel_id, channel_name, amount, detail) VALUES ('{now}', 'drop', NULL, '', 0, 'Hat')"
+            )
+        )
+
+    await s.migrate()
+    s.use_account("777")
+    [info] = await s.points_channel_info()
+    assert (info.channel.login, info.balance) == ("streamer", 1234)
+    assert await s.selected_ids() == {"c1"}
+    assert await s.count_events("drop") == 1
+    s.use_account("other")
+    assert await s.points_channels() == [] and await s.count_events("drop") == 0
+    await s.close()

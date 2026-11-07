@@ -143,6 +143,9 @@ class Farmer:
         self._logged_out("Logged out.")
 
     def _logged_in(self, account: Account) -> None:
+        if self.store.account_id != account.user_id:
+            self._forget_account_state()  # switching accounts: nothing carries over
+        self.store.use_account(account.user_id)
         self.twitch.authenticate(account.access_token, account.user_id, account.device_id)
         self.state.account = account
         self.state.login_message = ""
@@ -152,10 +155,27 @@ class Farmer:
 
     def _logged_out(self, message: str) -> None:
         self.twitch.deauthenticate()
+        # The account's data stays in the database (it comes back on the next login as the
+        # same account), but nothing of it is shown or used while logged out.
+        self.store.use_account(None)
+        self._forget_account_state()
         self.state.account = None
         self.state.status = "logged_out"
         self.state.login_message = message
-        self.state.plan = Plan()
+
+    def _forget_account_state(self) -> None:
+        st = self.state
+        st.plan = Plan()
+        st.campaigns = []
+        st.campaigns_at = None
+        st.live = {}
+        st.slot_balances = {}
+        st.skipped = {}
+        st.balances_at = None
+        st.transient_error = None
+        st.watch_report_error = None
+        self._watch_failures = {}
+        self._force_campaigns = True
 
     def resume(self) -> None:
         """Clear a protocol error after the owner has updated the code or wants to retry."""

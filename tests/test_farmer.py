@@ -387,3 +387,39 @@ async def test_balance_refresh_is_batched(farmer, store, tw):
     tw.calls.clear()
     await farmer.refresh_balances()
     assert tw.calls.count("points_many") == 1
+
+
+# --- per-account data --------------------------------------------------------------------
+
+
+async def test_logout_hides_account_data_and_relogin_restores_it(farmer, store, tw):
+    await logged_in(farmer)
+    tw.campaign_list = [campaign("c1")]
+    tw.go_live(stream("1"))
+    await store.add_points_channel("1", "user1")
+    await farmer.tick()
+    await store.set_selected("c1", True)
+    await farmer.tick()
+    assert farmer.state.plan.slots and farmer.state.campaigns
+
+    await farmer.logout()
+    assert farmer.state.plan.slots == () and farmer.state.campaigns == []
+    assert farmer.state.live == {} and farmer.state.slot_balances == {}
+    assert await store.points_channels() == [] and await store.selected_ids() == frozenset()
+
+    await farmer.login(TOKEN)
+    assert [p.login for p in await store.points_channels()] == ["user1"]
+    assert await store.selected_ids() == {"c1"}
+
+
+async def test_other_account_starts_empty(farmer, store, tw):
+    from dropbot.twitch import TokenInfo
+    from dropbot.twitch.protocol import CLIENT_ID
+
+    await logged_in(farmer)
+    await store.add_points_channel("1", "user1")
+    await farmer.logout()
+    tw.tokens["othertoken0123456789abc"] = TokenInfo("99", "someoneelse", CLIENT_ID)
+    await farmer.login("othertoken0123456789abc")
+    assert farmer.state.account.login == "someoneelse"
+    assert await store.points_channels() == []

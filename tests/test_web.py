@@ -276,3 +276,29 @@ async def test_campaign_card_flags_for_filters(env):
     assert 'data-selected="0" data-unlinked="0"' in html
     assert 'data-selected="0" data-unlinked="1"' in html
     assert "1 channel only" in html and "1 channels only" not in html
+
+
+async def test_logged_out_ui_shows_no_account_data(env):
+    farmer, tw, store, c = env
+    await farmer.login(TOKEN)
+    await store.add_points_channel("1", "user1")
+    tw.balances["user1"] = 4242
+    await farmer.refresh_balances()
+    await store.record("drop", campaign_id="c1", detail="Secret Hat")
+    assert "4,242" in (await c.get("/")).text
+
+    await c.post("/logout")
+    for path in ("/", "/channels", "/campaigns"):
+        html = (await c.get(path)).text
+        assert "4,242" not in html and "user1" not in html and "Secret Hat" not in html, path
+    assert (
+        '<div class="v num">0</div><div class="k">Total Channel Points' in (await c.get("/")).text
+    )
+
+
+async def test_account_actions_while_logged_out_redirect_to_login(env):
+    _, _, store, c = env
+    r = await c.post("/channels/add", data={"login": "whoever"})
+    assert r.status_code == 303 and r.headers["location"].startswith("/login?error=")
+    r = await c.post("/campaigns/c1/select", data={"selected": "1"})
+    assert r.status_code == 303 and r.headers["location"].startswith("/login?error=")

@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..domain import Campaign, DropReason
 from ..farmer import Farmer
+from ..store import NoAccount
 from ..twitch import AuthError, TwitchError
 from ..twitch.protocol import LOGIN_URL
 
@@ -78,6 +79,10 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     store = farmer.store
+
+    @app.exception_handler(NoAccount)
+    async def not_logged_in(_request: Request, _exc: NoAccount):
+        return back("/login", "Log in first.")
 
     @app.middleware("http")
     async def reject_cross_site_posts(request: Request, call_next):
@@ -253,6 +258,8 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
 
     @app.post("/channels/add")
     async def add_channel(login: str = Form(...)):
+        if farmer.state.account is None:
+            return back("/login", "Log in first.")
         login = channel_login(login)
         if not login:
             return back("/channels")
@@ -268,6 +275,8 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
 
     @app.post("/channels/import")
     async def import_follows():
+        if farmer.state.account is None:
+            return back("/login", "Log in first.")
         try:
             follows = await farmer.twitch.followed_channels()
         except TwitchError as e:

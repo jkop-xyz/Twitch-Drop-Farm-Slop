@@ -20,5 +20,6 @@ async def store(request, tmp_path):
             for t in ("event", "points_channel", "campaign_state", "account", "alembic_version"):
                 await conn.execute(text(f"DROP TABLE IF EXISTS {t}"))
     await s.migrate()
+    s.use_account("u1")
     yield s
     await s.close()

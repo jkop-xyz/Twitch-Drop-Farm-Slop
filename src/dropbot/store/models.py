@@ -29,6 +29,8 @@ class CampaignStateRow(Base):
 
     __tablename__ = "campaign_state"
 
+    # Per-account: the Twitch user id this row belongs to.
+    user_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     campaign_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(300), default="")
     game_name: Mapped[str] = mapped_column(String(300), default="")
@@ -41,6 +43,7 @@ class CampaignStateRow(Base):
 class PointsChannelRow(Base):
     __tablename__ = "points_channel"
 
+    user_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     channel_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     login: Mapped[str] = mapped_column(String(100))
     display_name: Mapped[str] = mapped_column(String(100), default="")
@@ -55,6 +58,7 @@ class EventRow(Base):
     __tablename__ = "event"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(32), index=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     kind: Mapped[str] = mapped_column(String(20), index=True)
     channel_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)

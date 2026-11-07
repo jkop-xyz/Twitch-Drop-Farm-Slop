@@ -6,6 +6,13 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Account data is now kept per Twitch account.**
+  - Points Channels, balances, claim history and campaign selections belong to the account that made them.
+  - After logging out the UI shows none of it, and logging back in as the same account brings it all back.
+  - A different account starts empty and never sees another account's data.
+  - Database migration `0002` assigns existing data to the account that's currently stored.
+
 ### Security
 - Added anti-framing headers (`X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`). Without them, another site could frame the UI and trick clicks past the cross-site check.
 - Added `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`, so the bot's LAN address isn't sent to sites the UI links to.

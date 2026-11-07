@@ -36,6 +36,10 @@ def _utc(dt: datetime | None) -> datetime | None:
     return dt
 
 
+class NoAccount(RuntimeError):
+    """Per-account data was written while no account is logged in."""
+
+
 @dataclass(frozen=True)
 class Account:
     access_token: str
@@ -80,6 +84,22 @@ class Store:
         self.url = normalize_url(url)
         self.engine: AsyncEngine = create_async_engine(self.url)
         self._session = async_sessionmaker(self.engine, expire_on_commit=False)
+        # Twitch user id whose data reads and writes apply to. None while logged out:
+        # reads then return nothing and writes raise NoAccount.
+        self._user: str | None = None
+
+    def use_account(self, user_id: str | None) -> None:
+        """Scope Points Channels, campaign selections and history to one Twitch account."""
+        self._user = user_id
+
+    @property
+    def account_id(self) -> str | None:
+        return self._user
+
+    def _uid(self) -> str:
+        if self._user is None:
+            raise NoAccount("not logged in")
+        return self._user
 
     @property
     def dialect(self) -> str:
@@ -132,13 +152,21 @@ class Store:
     async def observe_campaigns(self, campaigns: Iterable[Campaign]) -> None:
         """Record campaigns not seen before as unselected and new."""
         now = datetime.now(UTC)
+        uid = self._uid()
         async with self._session.begin() as s:
-            known = set((await s.scalars(select(CampaignStateRow.campaign_id))).all())
+            known = set(
+                (
+                    await s.scalars(
+                        select(CampaignStateRow.campaign_id).where(CampaignStateRow.user_id == uid)
+                    )
+                ).all()
+            )
             for c in campaigns:
                 if c.id in known:
                     continue
                 s.add(
                     CampaignStateRow(
+                        user_id=uid,
                         campaign_id=c.id,
                         name=c.name,
                         game_name=c.game.name,
@@ -151,8 +179,14 @@ class Store:
                 known.add(c.id)
 
     async def campaign_states(self) -> dict[str, CampaignState]:
+        if self._user is None:
+            return {}
         async with self._session() as s:
-            rows = (await s.scalars(select(CampaignStateRow))).all()
+            rows = (
+                await s.scalars(
+                    select(CampaignStateRow).where(CampaignStateRow.user_id == self._user)
+                )
+            ).all()
             return {
                 r.campaign_id: CampaignState(
                     r.campaign_id, r.seen, r.selected, _utc(r.first_seen_at)
@@ -161,9 +195,13 @@ class Store:
             }
 
     async def selected_ids(self) -> frozenset[str]:
+        if self._user is None:
+            return frozenset()
         async with self._session() as s:
             ids = await s.scalars(
-                select(CampaignStateRow.campaign_id).where(CampaignStateRow.selected.is_(True))
+                select(CampaignStateRow.campaign_id).where(
+                    CampaignStateRow.user_id == self._user, CampaignStateRow.selected.is_(True)
+                )
             )
             return frozenset(ids.all())
 
@@ -171,7 +209,10 @@ class Store:
         async with self._session.begin() as s:
             await s.execute(
                 update(CampaignStateRow)
-                .where(CampaignStateRow.campaign_id == campaign_id)
+                .where(
+                    CampaignStateRow.user_id == self._uid(),
+                    CampaignStateRow.campaign_id == campaign_id,
+                )
                 .values(selected=selected, seen=True)
             )
 
@@ -182,22 +223,39 @@ class Store:
         async with self._session.begin() as s:
             await s.execute(
                 update(CampaignStateRow)
-                .where(CampaignStateRow.campaign_id.in_(ids))
+                .where(
+                    CampaignStateRow.user_id == self._uid(), CampaignStateRow.campaign_id.in_(ids)
+                )
                 .values(selected=False)
             )
 
     async def mark_all_seen(self) -> None:
+        if self._user is None:
+            return
         async with self._session.begin() as s:
-            await s.execute(update(CampaignStateRow).values(seen=True))
+            await s.execute(
+                update(CampaignStateRow)
+                .where(CampaignStateRow.user_id == self._uid())
+                .values(seen=True)
+            )
 
     # --- Points Channels -------------------------------------------------------------------
 
     async def points_channels(self) -> list[PointsChannel]:
         return [i.channel for i in await self.points_channel_info()]
 
+    def _channels(self):
+        return (
+            select(PointsChannelRow)
+            .where(PointsChannelRow.user_id == self._uid())
+            .order_by(PointsChannelRow.rank)
+        )
+
     async def points_channel_info(self) -> list[PointsChannelInfo]:
+        if self._user is None:
+            return []
         async with self._session() as s:
-            rows = (await s.scalars(select(PointsChannelRow).order_by(PointsChannelRow.rank))).all()
+            rows = (await s.scalars(self._channels())).all()
             return [
                 PointsChannelInfo(
                     PointsChannel(r.channel_id, r.login, r.display_name, r.rank),
@@ -209,12 +267,16 @@ class Store:
 
     async def add_points_channel(self, channel_id: str, login: str, display_name: str = "") -> bool:
         """Append a channel at the bottom of the list. Returns False if it's already there."""
+        uid = self._uid()
         async with self._session.begin() as s:
-            if await s.get(PointsChannelRow, channel_id) is not None:
+            if await s.get(PointsChannelRow, (uid, channel_id)) is not None:
                 return False
-            top = await s.scalar(select(func.max(PointsChannelRow.rank)))
+            top = await s.scalar(
+                select(func.max(PointsChannelRow.rank)).where(PointsChannelRow.user_id == uid)
+            )
             s.add(
                 PointsChannelRow(
+                    user_id=uid,
                     channel_id=channel_id,
                     login=login,
                     display_name=display_name,
@@ -226,13 +288,16 @@ class Store:
     async def remove_points_channel(self, channel_id: str) -> None:
         async with self._session.begin() as s:
             await s.execute(
-                delete(PointsChannelRow).where(PointsChannelRow.channel_id == channel_id)
+                delete(PointsChannelRow).where(
+                    PointsChannelRow.user_id == self._uid(),
+                    PointsChannelRow.channel_id == channel_id,
+                )
             )
 
     async def reorder_points_channels(self, channel_ids: list[str]) -> None:
         """Set the ranking. Channels missing from the list keep their relative order after it."""
         async with self._session.begin() as s:
-            rows = (await s.scalars(select(PointsChannelRow).order_by(PointsChannelRow.rank))).all()
+            rows = (await s.scalars(self._channels())).all()
             by_id = {r.channel_id: r for r in rows}
             ordered = [by_id[c] for c in channel_ids if c in by_id]
             ordered += [r for r in rows if r.channel_id not in set(channel_ids)]
@@ -251,7 +316,7 @@ class Store:
     async def set_balance(self, channel_id: str, balance: int) -> int | None:
         """Store a channel's balance. Returns the previous one."""
         async with self._session.begin() as s:
-            row = await s.get(PointsChannelRow, channel_id)
+            row = await s.get(PointsChannelRow, (self._uid(), channel_id))
             if row is None:
                 return None
             prev = row.balance
@@ -275,6 +340,7 @@ class Store:
         async with self._session.begin() as s:
             s.add(
                 EventRow(
+                    user_id=self._uid(),
                     at=at or datetime.now(UTC),
                     kind=kind,
                     amount=amount,
@@ -288,7 +354,14 @@ class Store:
     async def recent_events(
         self, limit: int = 50, kinds: Iterable[str] | None = None
     ) -> list[Event]:
-        q = select(EventRow).order_by(EventRow.at.desc(), EventRow.id.desc()).limit(limit)
+        if self._user is None:
+            return []
+        q = (
+            select(EventRow)
+            .where(EventRow.user_id == self._user)
+            .order_by(EventRow.at.desc(), EventRow.id.desc())
+            .limit(limit)
+        )
         if kinds is not None:
             q = q.where(EventRow.kind.in_(list(kinds)))
         async with self._session() as s:
@@ -307,17 +380,22 @@ class Store:
             ]
 
     async def count_events(self, kind: str) -> int:
+        if self._user is None:
+            return 0
+        q = select(func.count()).where(EventRow.user_id == self._user, EventRow.kind == kind)
         async with self._session() as s:
-            return int(await s.scalar(select(func.count()).where(EventRow.kind == kind)) or 0)
+            return int(await s.scalar(q) or 0)
 
     async def points_gained_since(self, since: datetime) -> dict[str, int]:
         """Channel Points gained per channel since a moment.
 
         "points" events are positive balance changes, so they already include Bonus Chests.
         """
+        if self._user is None:
+            return {}
         q = (
             select(EventRow.channel_id, func.sum(EventRow.amount))
-            .where(EventRow.kind == "points", EventRow.at >= since)
+            .where(EventRow.user_id == self._user, EventRow.kind == "points", EventRow.at >= since)
             .group_by(EventRow.channel_id)
         )
         async with self._session() as s:

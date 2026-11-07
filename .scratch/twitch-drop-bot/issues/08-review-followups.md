@@ -9,4 +9,4 @@ Left over from the 2026-11-07 code review. Items 1–8 were fixed: the loops sur
 - **Points attribution after a gap.** The first gain after a channel starts being watched again is measured against a balance up to 30 minutes old, so points earned elsewhere count as farmed. Reset the baseline when a channel enters a slot.
 - **Event retention.** `points` events accumulate (a few hundred thousand a year). Prune them after about 90 days.
 - **CI hardening.** Actions are pinned to major-version tags rather than commit SHAs. Old `sha-*` images are never cleaned up from GHCR.
-- **Account switch.** Logging in as a different Twitch account keeps the previous account's selections and Points Channels.
+- ~~**Account switch.** Logging in as a different Twitch account keeps the previous account's selections and Points Channels.~~ Fixed: data is now kept per account (migration 0002).

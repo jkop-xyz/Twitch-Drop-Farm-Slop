@@ -6,6 +6,16 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-07
+
+Drag and drop to rank Points Channels.
+
+### Added
+- **Drag-and-drop ranking on the Points Channels page.** Grab the handle at the start of a row and drop it where you want it. The new order is saved right away.
+  - Works with a mouse and with touch on phones, and the page scrolls when you drag near the top or bottom edge.
+  - From the keyboard: focus a row's handle and press the up and down arrow keys.
+  - The up and down buttons still work on larger screens. On phones they're hidden to make room, since the handle does the same job.
+
 ## [0.2.0] - 2026-11-07
 
 A redesigned web UI, account data that's kept per Twitch account, and security hardening.

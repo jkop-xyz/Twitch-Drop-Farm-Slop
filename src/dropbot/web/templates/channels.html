@@ -19,18 +19,28 @@ tr:hover .actions, tr:focus-within .actions { opacity: 1; }
 tbody tr:hover td { background: var(--panel-2); }
 .who a { color: inherit; }
 .total { font-weight: 700; }
+td.grab { width: 1.75rem; padding-right: 0; }
+.handle { display: grid; place-items: center; width: 1.6rem; height: 1.8rem; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: var(--faint); cursor: grab; touch-action: none; }
+.handle:hover, .handle:focus-visible { color: var(--text); background: var(--panel-2); }
+tbody.sorting, tbody.sorting * { cursor: grabbing !important; user-select: none; }
+tbody tr.dragging td { background: var(--accent-soft) !important; }
+tbody tr.dragging .handle { color: var(--accent-text); }
+tbody tr.saved td { animation: saved 1s ease-out; }
+@keyframes saved { from { background: var(--accent-soft); } }
 .who .dot { display: none; }
 @media (max-width: 640px) {
   .col-status { display: none; }
   .who .dot { display: inline-block; }
   .rank { display: none; }
+  .actions form.mover { display: none; }  /* the drag handle covers reordering on small screens */
 }
 </style>
 
 <div class="page-head">
   <div>
     <h1>Points Channels</h1>
-    <p class="muted small">Ranked: the highest-ranked live channels get the Watch Slots Drops aren't using.</p>
+    <p class="muted small">Ranked: the highest-ranked live channels get the Watch Slots Drops aren't using. Drag <svg class="i" style="vertical-align:-.15em"><use href="#i-grip"/></svg> to reorder.</p>
   </div>
   <div class="row">
     <form method="post" action="/channels/import"><button class="ghost"><svg class="i"><use href="#i-import"/></svg>Import follows</button></form>
@@ -76,11 +86,12 @@ tbody tr:hover td { background: var(--panel-2); }
 {% if channels %}
 <div class="panel flush table-wrap">
 <table>
-  <thead><tr><th class="rank"></th><th>Channel</th><th class="col-status">Status</th><th class="num">Balance</th><th></th></tr></thead>
-  <tbody>
+  <thead><tr><th class="grab"></th><th class="rank"></th><th>Channel</th><th class="col-status">Status</th><th class="num">Balance</th><th></th></tr></thead>
+  <tbody id="channel-rows">
   {% for c in channels %}
   {% set s = live.get(c.channel.channel_id) %}
-  <tr>
+  <tr data-id="{{ c.channel.channel_id }}">
+    <td class="grab"><button type="button" class="handle" title="Drag to reorder (or focus and use the arrow keys)" aria-label="Reorder {{ c.channel.name }}"><svg class="i"><use href="#i-grip"/></svg></button></td>
     <td class="rank">{{ loop.index }}</td>
     <td><div class="who"><span class="dot {{ 'live' if s }}"></span>
       <span class="avatar sm" style="--h: {{ c.channel.login | hue }}">{{ c.channel.name[:1] }}</span>
@@ -94,10 +105,10 @@ tbody tr:hover td { background: var(--panel-2); }
     <td class="num" title="{{ 'Updated ' ~ (c.balance_at | until) if c.balance_at else 'Not fetched yet' }}">{{ c.balance | num }}</td>
     <td>
       <div class="actions">
-        <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline">
-          <input type="hidden" name="delta" value="-1"><button class="ghost icon" title="Move up" aria-label="Move {{ c.channel.name }} up" {{ "disabled" if loop.first }}><svg class="i"><use href="#i-up"/></svg></button></form>
-        <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline">
-          <input type="hidden" name="delta" value="1"><button class="ghost icon" title="Move down" aria-label="Move {{ c.channel.name }} down" {{ "disabled" if loop.last }}><svg class="i"><use href="#i-down"/></svg></button></form>
+        <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline mover">
+          <input type="hidden" name="delta" value="-1"><button class="ghost icon" data-move="up" title="Move up" aria-label="Move {{ c.channel.name }} up" {{ "disabled" if loop.first }}><svg class="i"><use href="#i-up"/></svg></button></form>
+        <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline mover">
+          <input type="hidden" name="delta" value="1"><button class="ghost icon" data-move="down" title="Move down" aria-label="Move {{ c.channel.name }} down" {{ "disabled" if loop.last }}><svg class="i"><use href="#i-down"/></svg></button></form>
         <form method="post" action="/channels/{{ c.channel.channel_id }}/remove" class="inline">
           <button class="ghost icon danger" title="Remove" aria-label="Remove {{ c.channel.name }}"><svg class="i"><use href="#i-x"/></svg></button></form>
       </div>
@@ -105,7 +116,7 @@ tbody tr:hover td { background: var(--panel-2); }
   </tr>
   {% endfor %}
   </tbody>
-  <tfoot><tr><td class="rank"></td><td colspan="2" class="muted small">Total across {{ channels | length }} channel{{ "s" if channels | length != 1 }}</td>
+  <tfoot><tr><td></td><td class="rank"></td><td colspan="2" class="muted small">Total across {{ channels | length }} channel{{ "s" if channels | length != 1 }}</td>
     <td class="num total">{{ total | num }}</td><td></td></tr></tfoot>
 </table>
 </div>
@@ -113,4 +124,68 @@ tbody tr:hover td { background: var(--panel-2); }
 {% else %}
 <div class="panel empty" style="text-align:center; padding:2rem">No channels yet. Add one above, or import the channels you follow.</div>
 {% endif %}
+
+<script>
+(() => {
+  // Drag-and-drop ranking. Pointer events cover mouse, pen and touch; arrow keys on a focused
+  // handle do the same from the keyboard. The new order is saved in one request on drop.
+  const rows = document.getElementById("channel-rows");
+  if (!rows) return;
+  const order = () => [...rows.children].map(r => r.dataset.id);
+  const refresh = () => [...rows.children].forEach((r, i, all) => {
+    r.querySelector(".rank").textContent = i + 1;
+    r.querySelector('[data-move="up"]').disabled = i === 0;
+    r.querySelector('[data-move="down"]').disabled = i === all.length - 1;
+  });
+  const save = async (row, before) => {
+    const now = order();
+    refresh();
+    if (now.join() === before.join()) return;
+    try {
+      const r = await fetch("/channels/order", { method: "POST", body: new URLSearchParams({ order: now.join() }) });
+      if (!r.ok || r.redirected) throw new Error(r.status);
+      row.classList.remove("saved"); void row.offsetWidth; row.classList.add("saved");
+    } catch (e) { location.reload(); }  // fall back to whatever the server has
+  };
+  let drag = null;
+  rows.addEventListener("pointerdown", e => {
+    const handle = e.target.closest(".handle");
+    if (!handle || e.button !== 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    drag = { row: handle.closest("tr"), pointer: e.pointerId, before: order() };
+    drag.row.classList.add("dragging");
+    rows.classList.add("sorting");
+  });
+  rows.addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.pointer) return;
+    const edge = 48;
+    if (e.clientY < edge) scrollBy(0, -12); else if (e.clientY > innerHeight - edge) scrollBy(0, 12);
+    const next = [...rows.children].find(r => r !== drag.row &&
+      e.clientY < r.getBoundingClientRect().top + r.offsetHeight / 2);
+    if (next) { if (drag.row.nextElementSibling !== next) rows.insertBefore(drag.row, next); }
+    else if (rows.lastElementChild !== drag.row) rows.appendChild(drag.row);
+  });
+  const drop = e => {
+    if (!drag || e.pointerId !== drag.pointer) return;
+    const { row, before } = drag;
+    drag = null;
+    row.classList.remove("dragging");
+    rows.classList.remove("sorting");
+    save(row, before);
+  };
+  rows.addEventListener("pointerup", drop);
+  rows.addEventListener("pointercancel", drop);
+  rows.addEventListener("keydown", e => {
+    const handle = e.target.closest(".handle");
+    if (!handle || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    e.preventDefault();
+    const row = handle.closest("tr"), before = order();
+    if (e.key === "ArrowUp" && row.previousElementSibling) rows.insertBefore(row, row.previousElementSibling);
+    if (e.key === "ArrowDown" && row.nextElementSibling) rows.insertBefore(row.nextElementSibling, row);
+    handle.focus();
+    save(row, before);
+  });
+})();
+</script>
 {% endblock %}

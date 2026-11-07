@@ -9,7 +9,13 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -302,6 +308,13 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
         await store.move_points_channel(channel_id, delta)
         farmer.wake()
         return back("/channels")
+
+    @app.post("/channels/order")
+    async def order_channels(order: str = Form("")):
+        """Set the whole ranking at once (drag and drop). `order` is comma-separated channel ids."""
+        await store.reorder_points_channels([c for c in order.split(",") if c])
+        farmer.wake()
+        return Response(status_code=204)
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_page(request: Request, error: str = ""):

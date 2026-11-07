@@ -81,6 +81,16 @@ async def test_points_channels_add_reorder_remove_import(env):
     assert [p.login for p in await store.points_channels()] == ["alpha", "beta"]
     await c.post("/channels/2/move", data={"delta": "-1"})
     assert [p.login for p in await store.points_channels()] == ["beta", "alpha"]
+    tw.add_user("4", "delta")
+    await c.post("/channels/add", data={"login": "delta"})
+    r = await c.post("/channels/order", data={"order": "4,1,nope,2"})  # drag and drop
+    assert r.status_code == 204
+    assert [p.login for p in await store.points_channels()] == ["delta", "alpha", "beta"]
+    assert (
+        'id="channel-rows"' in (html := (await c.get("/channels")).text) and 'data-id="4"' in html
+    )
+    await c.post("/channels/4/remove")
+    await c.post("/channels/2/move", data={"delta": "-1"})
     await c.post("/channels/2/remove")
     assert [p.login for p in await store.points_channels()] == ["alpha"]
 

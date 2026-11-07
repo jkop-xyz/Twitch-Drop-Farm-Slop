@@ -306,6 +306,10 @@ class Store:
                 for r in rows
             ]
 
+    async def count_events(self, kind: str) -> int:
+        async with self._session() as s:
+            return int(await s.scalar(select(func.count()).where(EventRow.kind == kind)) or 0)
+
     async def points_gained_since(self, since: datetime) -> dict[str, int]:
         """Channel Points gained per channel since a moment.
 

@@ -1,25 +1,74 @@
 {% extends "base.html" %}
-{% block title %}Campaigns · Drop Bot{% endblock %}
+{% block title %}Campaigns · Drop Farm{% endblock %}
 {% block content %}
-<div class="row" style="justify-content:space-between; margin-bottom:1rem">
-  <h1 style="margin:0">Drop Campaigns</h1>
-  <form method="post" action="/campaigns/refresh"><button>Refresh from Twitch</button></form>
+<style>
+.toolbar { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin-bottom: .5rem; }
+.toolbar .field { flex: 1 1 18rem; max-width: 30rem; }
+.chips { display: flex; gap: .35rem; flex-wrap: wrap; }
+.chip { font-size: .82rem; padding: .32rem .7rem; border-radius: 999px; background: var(--panel);
+  border: 1px solid var(--line); color: var(--muted); }
+.chip:hover { color: var(--text); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: transparent; color: var(--accent-text); }
+.chip .n { font-variant-numeric: tabular-nums; opacity: .7; margin-left: .15rem; }
+section.game h2 { margin-top: 1.75rem; }
+section.game h2 img { width: 1.6rem; aspect-ratio: 3/4; border-radius: 5px; object-fit: cover; }
+.campaign { display: flex; flex-direction: column; gap: .75rem; transition: border-color .15s, box-shadow .15s; }
+.campaign:hover { box-shadow: var(--shadow-lg); }
+.campaign.is-selected { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.c-head { display: flex; gap: .85rem; align-items: flex-start; }
+.c-meta { flex: 1; min-width: 0; }
+.c-title { font-weight: 650; line-height: 1.3; }
+.c-note { display: flex; gap: .5rem; align-items: flex-start; font-size: .82rem; color: var(--warn);
+  background: var(--warn-soft); border-radius: 9px; padding: .5rem .65rem; }
+.c-note svg.i { margin-top: .15rem; }
+.c-note a { color: inherit; text-decoration: underline; font-weight: 600; }
+.drops { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line-2); }
+.drops li { display: flex; gap: .65rem; align-items: center; padding: .55rem 0; border-bottom: 1px solid var(--line-2); }
+.drops li:last-child { border-bottom: 0; padding-bottom: 0; }
+.drops .thumb { width: 2rem; height: 2rem; }
+.drops .thumb.ph { display: grid; place-items: center; color: var(--faint); }
+.d-meta { flex: 1; min-width: 0; }
+.d-name { font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-status { flex: none; text-align: right; }
+.switch { position: relative; width: 2.6rem; height: 1.5rem; padding: 0; border-radius: 999px; flex: none;
+  background: var(--line); border: 0; transition: background .2s; }
+.switch:hover { background: var(--faint); }
+.switch .knob { position: absolute; top: .1875rem; left: .1875rem; width: 1.125rem; height: 1.125rem;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .25); transition: transform .2s; }
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"] .knob { transform: translateX(1.1rem); }
+.switch.htmx-request { opacity: .6; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+
+<div class="page-head">
+  <div>
+    <h1>Drop Campaigns</h1>
+    <p class="muted small">Only campaigns you switch on are farmed, soonest-ending first.
+      {% if state.campaigns_at %}Fetched {{ state.campaigns_at | until }}.{% endif %}</p>
+  </div>
+  <form method="post" action="/campaigns/refresh"><button><svg class="i"><use href="#i-refresh"/></svg>Refresh</button></form>
 </div>
-<p class="muted small">Only campaigns you tick are farmed. When several are farmable, the one ending soonest goes first.
-{% if state.campaigns_at %}Fetched {{ state.campaigns_at | until }}.{% endif %}</p>
 
 {% if games %}
-<div class="row" style="margin-bottom:.5rem">
-  <input type="search" id="campaign-search" placeholder="Search games, campaigns, rewards…"
-    style="flex:1; max-width:28rem" autocomplete="off">
+<div class="toolbar">
+  <label class="field"><svg class="i"><use href="#i-search"/></svg>
+    <input type="search" id="campaign-search" placeholder="Search games, campaigns, rewards…" autocomplete="off" aria-label="Search campaigns"></label>
+  <div class="chips" role="group" aria-label="Filter">
+    <button type="button" class="chip" data-filter="all" aria-pressed="true">All</button>
+    <button type="button" class="chip" data-filter="selected" aria-pressed="false">Selected<span class="n" data-count="selected"></span></button>
+    <button type="button" class="chip" data-filter="unselected" aria-pressed="false">Not selected</button>
+    <button type="button" class="chip" data-filter="unlinked" aria-pressed="false">Needs account link<span class="n" data-count="unlinked"></span></button>
+  </div>
+  <span class="spacer"></span>
   <span id="campaign-count" class="muted small"></span>
 </div>
-<p id="campaign-none" class="muted" hidden>No campaigns match.</p>
+<div id="campaign-none" class="panel empty" hidden style="margin-top:1rem; text-align:center">No campaigns match.</div>
 {% endif %}
 
 {% for game, campaigns in games %}
 <section class="game" data-search="{{ game | lower }}">
-  <h2>{{ game }}</h2>
+  <h2>{% if campaigns[0].image_url %}<img src="{{ campaigns[0].image_url }}" alt="" loading="lazy">{% endif %}{{ game }}</h2>
   <div class="grid">
   {% for c in campaigns %}
     {% include "_campaign.html" %}
@@ -27,9 +76,9 @@
   </div>
 </section>
 {% else %}
-  <div class="panel muted">
+  <div class="panel empty">
     {% if state.account %}No campaigns loaded yet. They appear after the first refresh.
-    {% else %}Log in to see campaigns.{% endif %}
+    {% else %}<a href="/login">Log in</a> to see campaigns.{% endif %}
   </div>
 {% endfor %}
 
@@ -37,33 +86,64 @@
 (() => {
   const input = document.getElementById("campaign-search");
   if (!input) return;
-  const KEY = "campaign-search";
+  const chips = [...document.querySelectorAll(".chip[data-filter]")];
+  const KEY = "campaign-search", FKEY = "campaign-filter";
+  let filter = "all";
+  const passes = (p) => filter === "all"
+    || (filter === "selected" && p.dataset.selected === "1")
+    || (filter === "unselected" && p.dataset.selected === "0")
+    || (filter === "unlinked" && p.dataset.unlinked === "1");
   const apply = () => {
     const terms = input.value.toLowerCase().split(/\s+/).filter(Boolean);
     let shown = 0, total = 0;
+    const counts = { selected: 0, unlinked: 0 };
     for (const section of document.querySelectorAll("section.game")) {
       const game = section.dataset.search;
       let any = false;
       for (const panel of section.querySelectorAll(".campaign")) {
         total++;
+        if (panel.dataset.selected === "1") counts.selected++;
+        if (panel.dataset.unlinked === "1") counts.unlinked++;
         const text = game + " " + panel.dataset.search;
-        const hit = terms.every(t => text.includes(t));
+        const hit = terms.every(t => text.includes(t)) && passes(panel);
         panel.hidden = !hit;
         if (hit) { any = true; shown++; }
       }
       section.hidden = !any;
     }
+    for (const el of document.querySelectorAll("[data-count]")) el.textContent = counts[el.dataset.count] || "";
+    chips.forEach(c => c.setAttribute("aria-pressed", String(c.dataset.filter === filter)));
     document.getElementById("campaign-count").textContent =
-      terms.length ? `${shown} of ${total}` : `${total} campaigns`;
+      (terms.length || filter !== "all") ? `${shown} of ${total}` : `${total} campaigns`;
     document.getElementById("campaign-none").hidden = shown > 0;
-    try { sessionStorage.setItem(KEY, input.value); } catch (e) {}
+    try { sessionStorage.setItem(KEY, input.value); sessionStorage.setItem(FKEY, filter); } catch (e) {}
   };
-  // Keep the filter across the reload that follows selecting a campaign.
   const fromUrl = new URLSearchParams(location.search).get("q");
-  if (fromUrl !== null) input.value = fromUrl;
-  else try { input.value = sessionStorage.getItem(KEY) || ""; } catch (e) {}
+  try {
+    input.value = fromUrl !== null ? fromUrl : (sessionStorage.getItem(KEY) || "");
+    filter = sessionStorage.getItem(FKEY) || "all";
+  } catch (e) {}
   input.addEventListener("input", apply);
   input.addEventListener("keydown", e => { if (e.key === "Escape") { input.value = ""; apply(); } });
+  chips.forEach(c => c.addEventListener("click", () => { filter = c.dataset.filter; apply(); }));
+  const recount = () => {
+    const cards = [...document.querySelectorAll(".campaign")];
+    const counts = {
+      selected: cards.filter(p => p.dataset.selected === "1").length,
+      unlinked: cards.filter(p => p.dataset.unlinked === "1").length,
+    };
+    for (const el of document.querySelectorAll("[data-count]")) el.textContent = counts[el.dataset.count] || "";
+  };
+  // A toggled card is swapped in by htmx: update the counts, but don't re-filter (that would
+  // make the card vanish mid-click under "Selected"/"Not selected"). The body persists across
+  // boosted navigation, so register the listener only once and point it at this page's recount.
+  window.__campaignRecount = recount;
+  if (!window.__campaignSwapHook) {
+    window.__campaignSwapHook = true;
+    document.body.addEventListener("htmx:afterSwap", () => {
+      if (document.getElementById("campaign-search")) window.__campaignRecount();
+    });
+  }
   apply();
 })();
 </script>

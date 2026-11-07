@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import zlib
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -26,10 +27,21 @@ def _humanize(delta: timedelta) -> str:
     hours, rem = divmod(rem, 3600)
     mins = rem // 60
     if days:
-        return f"{days}d {hours}h"
+        return f"{days}d {hours}h" if hours else f"{days}d"
     if hours:
-        return f"{hours}h {mins}m"
+        return f"{hours}h {mins}m" if mins else f"{hours}h"
     return f"{mins}m"
+
+
+def _minutes(n: int) -> str:
+    """Minutes as "45 min" / "2h 5m"."""
+    n = max(0, int(n))
+    return f"{n} min" if n < 60 else _humanize(timedelta(minutes=n))
+
+
+def _hue(text: str) -> int:
+    """A stable colour for an avatar, derived from a name."""
+    return zlib.crc32(text.lower().encode()) % 360
 
 
 SECURITY_HEADERS = {
@@ -80,6 +92,8 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
         if dt is None:
             return ""
         delta = dt - farmer.clock()
+        if abs(delta.total_seconds()) < 60:
+            return "just now" if delta.total_seconds() <= 0 else "in under a minute"
         return (
             ("in " if delta.total_seconds() >= 0 else "")
             + _humanize(delta)
@@ -91,6 +105,8 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
 
     templates.env.filters["until"] = until
     templates.env.filters["num"] = num
+    templates.env.filters["minutes"] = _minutes
+    templates.env.filters["hue"] = _hue
 
     def render(request: Request, name: str, **ctx) -> HTMLResponse:
         ctx.setdefault("state", farmer.state)
@@ -131,6 +147,10 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
             "events": await store.recent_events(limit=20, kinds=["drop", "bonus"]),
             "campaign_names": {c.id: f"{c.game.name}: {c.name}" for c in st.campaigns},
             "selected_count": len(await store.selected_ids()),
+            "total_points": sum(c.balance or 0 for c in channels),
+            "week_total": sum(week.get(c.channel.channel_id, 0) for c in channels),
+            "drops_claimed": await store.count_events("drop"),
+            "slot_count": farmer.slots,
         }
 
     # --- pages -----------------------------------------------------------------------------
@@ -141,7 +161,7 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
 
     @app.get("/partials/dashboard", response_class=HTMLResponse)
     async def dashboard_partial(request: Request):
-        return render(request, "_dashboard.html", **await dashboard_ctx())
+        return render(request, "_dashboard.html", partial=True, **await dashboard_ctx())
 
     @app.get("/campaigns", response_class=HTMLResponse)
     async def campaigns_page(request: Request):

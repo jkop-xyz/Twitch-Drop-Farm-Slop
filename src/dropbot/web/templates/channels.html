@@ -1,72 +1,116 @@
 {% extends "base.html" %}
-{% block title %}Points Channels · Drop Bot{% endblock %}
+{% block title %}Points Channels · Drop Farm{% endblock %}
 {% block content %}
-<h1>Points Channels</h1>
-<p class="muted small">Ranked list. The highest-ranked live channels get the Watch Slots that Drops aren't using.</p>
-{% if error %}<div class="banner bad small">{{ error }}</div>{% endif %}
-<div class="row" style="margin-bottom:1rem">
-  <form method="post" action="/channels/add" class="row">
-    <input type="text" name="login" placeholder="channel name or URL" required>
-    <button class="primary">Add</button>
-  </form>
-  <form method="post" action="/channels/import"><button>Import my follows</button></form>
-  <form method="post" action="/channels/balances"><button>Refresh balances</button></form>
+<style>
+.tools { display: grid; gap: .75rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-bottom: 1rem; }
+@media (max-width: 760px) { .tools { grid-template-columns: minmax(0, 1fr); } }
+.tools form.row { flex-wrap: nowrap; }
+.tools .field { flex: 1; }
+.tools .label { font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .4rem; }
+.check-result { margin-top: .65rem; font-size: .88rem; display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.rank { color: var(--faint); font-variant-numeric: tabular-nums; width: 1.5rem; }
+.status { display: inline-flex; align-items: center; gap: .4rem; font-size: .85rem; }
+.status .game { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16rem; }
+.actions { display: flex; gap: .1rem; justify-content: flex-end; opacity: 0; transition: opacity .15s; }
+tr:hover .actions, tr:focus-within .actions { opacity: 1; }
+@media (hover: none) { .actions { opacity: 1; } }
+.actions button.icon:hover { color: var(--text); }
+.actions button.danger:hover { color: var(--bad); background: var(--bad-soft); }
+tbody tr:hover td { background: var(--panel-2); }
+.who a { color: inherit; }
+.total { font-weight: 700; }
+.who .dot { display: none; }
+@media (max-width: 640px) {
+  .col-status { display: none; }
+  .who .dot { display: inline-block; }
+  .rank { display: none; }
+}
+</style>
+
+<div class="page-head">
+  <div>
+    <h1>Points Channels</h1>
+    <p class="muted small">Ranked: the highest-ranked live channels get the Watch Slots Drops aren't using.</p>
+  </div>
+  <div class="row">
+    <form method="post" action="/channels/import"><button class="ghost"><svg class="i"><use href="#i-import"/></svg>Import follows</button></form>
+    <form method="post" action="/channels/balances"><button class="ghost"><svg class="i"><use href="#i-refresh"/></svg>Refresh balances</button></form>
+  </div>
+</div>
+{% if error %}<div class="banner bad small"><svg class="i"><use href="#i-alert"/></svg><div class="grow">{{ error }}</div></div>{% endif %}
+
+<div class="tools">
+  <div class="panel">
+    <div class="label">Add a channel</div>
+    <form method="post" action="/channels/add" class="row">
+      <label class="field"><svg class="i"><use href="#i-plus"/></svg>
+        <input type="text" name="login" placeholder="Channel name or URL" required aria-label="Channel to add"></label>
+      <button class="primary">Add</button>
+    </form>
+  </div>
+  <div class="panel">
+    <div class="label">Check your balance on any channel</div>
+    <form method="get" action="/channels" class="row">
+      <label class="field"><svg class="i"><use href="#i-search"/></svg>
+        <input type="text" name="check" placeholder="Channel name or URL" value="{{ check }}" required aria-label="Channel to check"></label>
+      <button>Check</button>
+    </form>
+    {% if checked %}
+      <div class="check-result">
+      {% if not checked.user %}<span class="muted">No Twitch channel named <strong>{{ checked.login }}</strong>.</span>
+      {% elif not checked.points %}<strong>{{ checked.user.display_name or checked.user.login }}</strong><span class="muted">has no Channel Points.</span>
+      {% else %}
+        <span class="avatar sm" style="--h: {{ checked.user.login | hue }}">{{ (checked.user.display_name or checked.user.login)[:1] }}</span>
+        <span>You have <strong class="num">{{ checked.points.balance | num }}</strong> on <strong>{{ checked.user.display_name or checked.user.login }}</strong></span>
+        {% if checked.points.bonus_claim_id %}<span class="badge ok">Bonus Chest available</span>{% endif %}
+        {% if checked.user.channel_id not in on_list %}
+        <form method="post" action="/channels/add" class="inline">
+          <input type="hidden" name="login" value="{{ checked.user.login }}"><button class="ghost" style="padding:.2rem .5rem"><svg class="i"><use href="#i-plus"/></svg>add to list</button></form>
+        {% endif %}
+      {% endif %}
+      </div>
+    {% endif %}
+  </div>
 </div>
 
-<div class="panel" style="margin-bottom:1rem">
-  <form method="get" action="/channels" class="row">
-    <strong class="small">Check balance on any channel</strong>
-    <input type="text" name="check" placeholder="channel name or URL" value="{{ check }}" required>
-    <button>Check</button>
-  </form>
-  {% if checked %}
-    <p class="small" style="margin:.6rem 0 0">
-    {% if not checked.user %}No Twitch channel named <strong>{{ checked.login }}</strong>.
-    {% elif not checked.points %}<strong>{{ checked.user.display_name or checked.user.login }}</strong> has no Channel Points.
-    {% else %}You have <strong>{{ checked.points.balance | num }}</strong> Channel Points on
-      <strong>{{ checked.user.display_name or checked.user.login }}</strong>{% if checked.points.bonus_claim_id %}
-      <span class="badge ok">Bonus Chest available</span>{% endif %}.
-      {% if checked.user.channel_id not in on_list %}
-      <form method="post" action="/channels/add" class="inline">
-        <input type="hidden" name="login" value="{{ checked.user.login }}"><button class="link">+ add to list</button></form>
-      {% endif %}
-    {% endif %}
-    </p>
-  {% endif %}
-</div>
 {% if channels %}
-<div class="panel table-wrap">
+<div class="panel flush table-wrap">
 <table>
-  <tr><th>#</th><th>Channel</th><th>Status</th><th class="num">Balance</th><th></th></tr>
+  <thead><tr><th class="rank"></th><th>Channel</th><th class="col-status">Status</th><th class="num">Balance</th><th></th></tr></thead>
+  <tbody>
   {% for c in channels %}
   {% set s = live.get(c.channel.channel_id) %}
   <tr>
-    <td class="muted">{{ loop.index }}</td>
-    <td><a href="https://www.twitch.tv/{{ c.channel.login }}" target="_blank" rel="noopener">{{ c.channel.name }}</a></td>
-    <td class="small">
-      {% if s %}<span class="dot live"></span>live <span class="muted">· {{ s.game_name }}</span>
-        {% if c.channel.channel_id in watched %} <span class="badge ok">watching</span>{% endif %}
-        {% if c.channel.channel_id in skipped %} <span class="badge warn" title="Watching kept failing (sub-only, region-locked, ...). Retrying {{ skipped[c.channel.channel_id] | until }}.">can't watch, skipped</span>{% endif %}
-      {% else %}<span class="dot"></span><span class="muted">offline</span>{% endif %}
+    <td class="rank">{{ loop.index }}</td>
+    <td><div class="who"><span class="dot {{ 'live' if s }}"></span>
+      <span class="avatar sm" style="--h: {{ c.channel.login | hue }}">{{ c.channel.name[:1] }}</span>
+      <a class="name" href="https://www.twitch.tv/{{ c.channel.login }}" target="_blank" rel="noopener">{{ c.channel.name }}</a></div></td>
+    <td class="col-status">
+      {% if s %}<span class="status"><span class="dot live"></span>Live <span class="game">· {{ s.game_name }}</span></span>
+        {% if c.channel.channel_id in watched %}<span class="badge ok" style="margin-left:.3rem"><svg class="i"><use href="#i-eye"/></svg>watching</span>{% endif %}
+        {% if c.channel.channel_id in skipped %}<span class="badge warn" style="margin-left:.3rem" title="Watching kept failing (sub-only, region-locked, ...). Retrying {{ skipped[c.channel.channel_id] | until }}.">can't watch, skipped</span>{% endif %}
+      {% else %}<span class="status muted"><span class="dot"></span>Offline</span>{% endif %}
     </td>
-    <td class="num">{{ c.balance | num }}
-      {% if c.balance_at %}<div class="muted small">{{ c.balance_at | until }}</div>{% endif %}</td>
-    <td class="num" style="white-space:nowrap">
-      <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline">
-        <input type="hidden" name="delta" value="-1"><button class="link" title="Move up" {{ "disabled" if loop.first }}>▲</button></form>
-      <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline">
-        <input type="hidden" name="delta" value="1"><button class="link" title="Move down" {{ "disabled" if loop.last }}>▼</button></form>
-      <form method="post" action="/channels/{{ c.channel.channel_id }}/remove" class="inline">
-        <button class="link" title="Remove">✕</button></form>
+    <td class="num" title="{{ 'Updated ' ~ (c.balance_at | until) if c.balance_at else 'Not fetched yet' }}">{{ c.balance | num }}</td>
+    <td>
+      <div class="actions">
+        <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline">
+          <input type="hidden" name="delta" value="-1"><button class="ghost icon" title="Move up" aria-label="Move {{ c.channel.name }} up" {{ "disabled" if loop.first }}><svg class="i"><use href="#i-up"/></svg></button></form>
+        <form method="post" action="/channels/{{ c.channel.channel_id }}/move" class="inline">
+          <input type="hidden" name="delta" value="1"><button class="ghost icon" title="Move down" aria-label="Move {{ c.channel.name }} down" {{ "disabled" if loop.last }}><svg class="i"><use href="#i-down"/></svg></button></form>
+        <form method="post" action="/channels/{{ c.channel.channel_id }}/remove" class="inline">
+          <button class="ghost icon danger" title="Remove" aria-label="Remove {{ c.channel.name }}"><svg class="i"><use href="#i-x"/></svg></button></form>
+      </div>
     </td>
   </tr>
   {% endfor %}
+  </tbody>
+  <tfoot><tr><td class="rank"></td><td colspan="2" class="muted small">Total across {{ channels | length }} channel{{ "s" if channels | length != 1 }}</td>
+    <td class="num total">{{ total | num }}</td><td></td></tr></tfoot>
 </table>
 </div>
-<p class="muted small">Total across these channels: <strong>{{ total | num }}</strong>.
-  Live status updates about once a minute. Watched channels' balances update every minute,
-  and the others every 30 minutes or when you press Refresh balances.</p>
+<p class="tiny faint" style="margin-top:.6rem">Live status updates about once a minute. Balances of watched channels update every minute, the rest every 30 minutes{% if state.balances_at %} (last {{ state.balances_at | until }}){% endif %}. Hover a balance to see when it was fetched.</p>
 {% else %}
-<div class="panel muted">No channels yet.</div>
+<div class="panel empty" style="text-align:center; padding:2rem">No channels yet. Add one above, or import the channels you follow.</div>
 {% endif %}
 {% endblock %}

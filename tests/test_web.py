@@ -101,7 +101,8 @@ async def test_dashboard_shows_watch_slots(env):
     await store.set_selected("c1", True)
     await farmer.tick()
     html = (await c.get("/partials/dashboard")).text
-    assert "user1" in html and "15/60 min" in html and "1,234" in html
+    assert "user1" in html and "15 / 60 min" in html and "1,234" in html and "45 min left" in html
+    assert 'id="status-pill" hx-swap-oob="true"' in html  # header pill refreshes too
 
 
 async def test_protocol_error_banner_and_resume(env):
@@ -130,7 +131,7 @@ async def test_balance_check_and_refresh(env):
     r = await c.post("/channels/balances")
     assert r.status_code == 303 and "error" not in r.headers["location"]
     html = (await c.get("/channels")).text
-    assert "5,000" in html and "Total across these channels: <strong>5,000" in html
+    assert 'class="num total">5,000<' in html and "Total across 1 channel<" in html
 
 
 async def test_watch_report_notice(env):
@@ -153,8 +154,10 @@ async def test_watch_slot_shows_channel_points(env):
     await store.set_selected("c1", True)
     await farmer.tick()
     html = (await c.get("/partials/dashboard")).text
-    assert "<strong>777</strong> Channel Points" in html
-    assert "<strong>12,345</strong> Channel Points" in html
+    import re
+
+    feet = re.findall(r'class="pts">(.*?)</span>', html, re.S)
+    assert any("777" in f for f in feet) and any("12,345" in f for f in feet)
     # The Drop-only stream's balance is shown but not recorded as farmed.
     assert [e.channel_id for e in await store.recent_events(kinds=["points", "bonus"])] == []
 
@@ -213,11 +216,8 @@ async def test_htmx_select_swaps_just_the_card(env):
     await farmer.tick()
     r = await c.post("/campaigns/c1/select", data={"selected": "1"}, headers={"HX-Request": "true"})
     assert r.status_code == 200
-    assert (
-        r.text.lstrip().startswith('<div class="panel campaign"')
-        or 'class="panel campaign"' in r.text[:300]
-    )
-    assert "✓ Selected" in r.text and "<html" not in r.text
+    assert r.text.lstrip().startswith('<article class="panel campaign is-selected"')
+    assert 'aria-checked="true"' in r.text and "<html" not in r.text
     assert await store.selected_ids() == {"c1"}
 
 
@@ -239,3 +239,40 @@ async def test_security_headers_and_no_api_schema(env):
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["referrer-policy"] == "no-referrer"
     assert (await c.get("/openapi.json")).status_code == 404
+
+
+async def test_dashboard_stats_and_full_page_has_single_status_pill(env):
+    farmer, tw, store, c = env
+    await farmer.login(TOKEN)
+    await store.add_points_channel("1", "user1")
+    tw.balances["user1"] = 2500
+    await farmer.refresh_balances()
+    await store.record("drop", campaign_id="c1", detail="Hat")
+    await store.record("drop", campaign_id="c1", detail="Cape")
+    html = (await c.get("/")).text
+    assert html.count('id="status-pill"') == 1 and "hx-swap-oob" not in html
+    assert '<div class="v num">2,500</div>' in html
+    assert '<div class="v num">2</div><div class="k">Drops claimed' in html
+
+
+def test_time_and_name_helpers():
+    from datetime import timedelta
+
+    from dropbot.web.app import _hue, _humanize, _minutes
+
+    assert _humanize(timedelta(hours=3)) == "3h"
+    assert _humanize(timedelta(hours=3, minutes=5)) == "3h 5m"
+    assert _humanize(timedelta(days=2)) == "2d"
+    assert _minutes(45) == "45 min" and _minutes(125) == "2h 5m"
+    assert _hue("Sodapoppin") == _hue("sodapoppin") and 0 <= _hue("x") < 360
+
+
+async def test_campaign_card_flags_for_filters(env):
+    farmer, tw, _, c = env
+    await farmer.login(TOKEN)
+    tw.campaign_list = [campaign("c1"), campaign("c2", linked=False, allowed={"9"})]
+    await farmer.tick()
+    html = (await c.get("/campaigns")).text
+    assert 'data-selected="0" data-unlinked="0"' in html
+    assert 'data-selected="0" data-unlinked="1"' in html
+    assert "1 channel only" in html and "1 channels only" not in html

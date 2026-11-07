@@ -1,0 +1,15 @@
+{# Header status. Also sent out-of-band with each dashboard refresh. #}
+{% set n_slots = state.plan.slots | length %}
+<span id="status-pill"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if state.status == 'running' and n_slots %}
+    <span class="pill ok" title="Watching {{ n_slots }} stream{{ 's' if n_slots != 1 }}"><span class="dot"></span>Farming</span>
+  {% elif state.status == 'running' %}
+    <span class="pill" title="Nothing you picked is live right now"><span class="dot"></span>Idle</span>
+  {% elif state.status == 'paused' %}
+    <span class="pill bad"><span class="dot"></span>Paused</span>
+  {% elif state.status == 'logged_out' %}
+    <span class="pill warn"><span class="dot"></span>Logged out</span>
+  {% else %}
+    <span class="pill"><span class="dot"></span>Starting</span>
+  {% endif %}
+</span>

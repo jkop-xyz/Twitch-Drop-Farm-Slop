@@ -12,6 +12,12 @@ Versioning: [SemVer](https://semver.org/).
 - The OpenAPI schema (`/openapi.json`) is no longer exposed.
 
 ### Changed
+- **Redesigned web UI.**
+  - Header: logo and favicon, a live status pill ("Farming", "Idle", "Paused", "Logged out") on every page, and icon navigation that shortens on phones.
+  - Dashboard: a stats row, Watch Slot cards with reward art, a bolder progress bar with time left, and a compact activity feed.
+  - Campaigns: box art, toggle switches, reward images with progress per Drop, filter chips (Selected, Not selected, Needs account link) and a consistent grid.
+  - Points Channels: avatars, lighter rows, icon buttons that show on hover, a totals row, and a layout that fits on phones.
+  - Friendlier time labels ("just now", "3h ago") and better dark-mode contrast.
 - The image is built in two stages: only the installed wheel ships, with no source tree or build leftovers.
 - `requirements.lock` is renamed `requirements.txt`, so Dependabot recognises it.
 - Dependabot keeps the Python dependencies, GitHub Actions and the Docker base image up to date with weekly grouped PRs. Dependabot alerts and automatic security-fix PRs are enabled for known CVEs.

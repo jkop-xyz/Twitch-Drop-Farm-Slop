@@ -1,42 +1,56 @@
 {# One campaign card. Rendered inside campaigns.html and on its own after (de)selecting. #}
 {% set st = states.get(c.id) %}
 {% set selected = st and st.selected %}
-<div class="panel campaign"
+{% set n_claimed = c.drops | selectattr("claimed") | list | length %}
+<article class="panel campaign {{ 'is-selected' if selected }}"
+  data-selected="{{ 1 if selected else 0 }}" data-unlinked="{{ 0 if c.link_ok else 1 }}"
   data-search="{{ (c.name ~ ' ' ~ (c.drops | map(attribute='rewards') | map('join', ' ') | join(' ')) ~ ' ' ~ (c.drops | map(attribute='name') | join(' '))) | lower }}">
-  <form method="post" action="/campaigns/{{ c.id }}/select" class="row" style="align-items:flex-start"
-    hx-post="/campaigns/{{ c.id }}/select" hx-target="closest .campaign" hx-swap="outerHTML">
-    <input type="hidden" name="selected" value="{{ '' if selected else '1' }}">
-    <button class="{{ 'primary' if selected }}" title="{{ 'Deselect' if selected else 'Select' }}">
-      {{ "✓ Selected" if selected else "Select" }}</button>
-    <div style="flex:1; min-width: 10rem">
-      <strong>{{ c.name }}</strong>
-      <div class="row small" style="margin-top:.2rem">
+  <div class="c-head">
+    {% if c.image_url %}<img class="boxart" src="{{ c.image_url }}" alt="" loading="lazy">{% endif %}
+    <div class="c-meta">
+      <div class="c-title">{{ c.name }}</div>
+      <div class="row tiny" style="gap:.3rem; margin-top:.3rem">
         {% if st and not st.seen %}<span class="badge new">new</span>{% endif %}
-        {% if c.id == farming_id %}<span class="badge ok">farming now</span>{% endif %}
+        {% if c.id == farming_id %}<span class="badge ok"><span class="dot live" style="width:.4rem;height:.4rem"></span>farming now</span>{% endif %}
         {% if not c.running(now) and not c.ended(now) %}<span class="badge">starts {{ c.starts_at | until }}</span>{% endif %}
         {% if c.ended(now) %}<span class="badge">ended: claim window</span>{% endif %}
         {% if not c.link_ok %}<span class="badge warn">no account linked</span>{% endif %}
-        {% if c.allowed_channel_ids is not none %}<span class="badge">{{ c.allowed_channel_ids | length }} channels only</span>{% endif %}
+        {% if c.allowed_channel_ids is not none %}{% set n = c.allowed_channel_ids | length %}<span class="badge">{{ n }} channel{{ "s" if n != 1 }} only</span>{% endif %}
       </div>
-      <div class="muted small">ends {{ c.ends_at | until }}</div>
+      <div class="tiny muted" style="margin-top:.35rem"><svg class="i"><use href="#i-clock"/></svg>
+        ends {{ c.ends_at | until }} · {{ n_claimed }}/{{ c.drops | length }} claimed</div>
     </div>
-  </form>
+    <form method="post" action="/campaigns/{{ c.id }}/select"
+      hx-post="/campaigns/{{ c.id }}/select" hx-target="closest .campaign" hx-swap="outerHTML">
+      <input type="hidden" name="selected" value="{{ '' if selected else '1' }}">
+      <button class="switch" role="switch" aria-checked="{{ 'true' if selected else 'false' }}"
+        title="{{ 'Selected: click to stop farming this' if selected else 'Select to farm this campaign' }}">
+        <span class="knob"></span><span class="sr">{{ "Selected" if selected else "Select" }}</span></button>
+    </form>
+  </div>
   {% if not c.link_ok %}
-    <p class="small" style="margin:.5rem 0 0; color: var(--warn)">
-      No game account is linked, so this won't be farmed even if selected.
-      {% if c.link_url.startswith("https://") %}<a href="{{ c.link_url }}" target="_blank" rel="noopener">Link your account</a>.{% endif %}
-    </p>
+    <div class="c-note"><svg class="i"><use href="#i-link"/></svg>
+      <span>No game account is linked, so this won't be farmed even if selected.
+      {% if c.link_url.startswith("https://") %}<a href="{{ c.link_url }}" target="_blank" rel="noopener">Link your account</a>{% endif %}</span>
+    </div>
   {% endif %}
-  <table class="small" style="margin-top:.5rem">
+  <ul class="drops">
   {% for d in c.drops %}
-    <tr>
-      <td>{{ d.rewards | join(", ") or d.name }}</td>
-      <td class="num" style="white-space:nowrap">
-        {% if d.claimed %}<span class="badge ok">claimed</span>
+    <li>
+      {% if d.image_url %}<img class="thumb" src="{{ d.image_url }}" alt="" loading="lazy">
+      {% else %}<span class="thumb ph"><svg class="i"><use href="#i-drop"/></svg></span>{% endif %}
+      <div class="d-meta">
+        <div class="d-name">{{ d.rewards | join(", ") or d.name }}</div>
+        {% if d.farmable_by_watching and not d.claimed %}
+          <div class="bar thin" style="margin-top:.35rem"><i style="width: {{ (100 * d.current_minutes / d.required_minutes) | round | int }}%"></i></div>
+        {% endif %}
+      </div>
+      <div class="d-status tiny">
+        {% if d.claimed %}<span class="badge ok"><svg class="i"><use href="#i-check"/></svg>claimed</span>
         {% elif not d.farmable_by_watching %}<span class="badge">not farmable by watching</span>
-        {% else %}{{ d.current_minutes }}/{{ d.required_minutes }} min{% endif %}
-      </td>
-    </tr>
+        {% else %}<span class="num muted">{{ d.current_minutes }}/{{ d.required_minutes }} min</span>{% endif %}
+      </div>
+    </li>
   {% endfor %}
-  </table>
-</div>
+  </ul>
+</article>

@@ -1,32 +1,50 @@
 {% extends "base.html" %}
-{% block title %}Account · Drop Bot{% endblock %}
+{% block title %}Account · Drop Farm{% endblock %}
 {% block content %}
-<h1>Account</h1>
-{% if error %}<div class="banner bad small">{{ error }}</div>{% endif %}
-{% if state.login_message %}<div class="banner warn small">{{ state.login_message }}</div>{% endif %}
+<style>
+.acct { max-width: 640px; }
+.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: grid; gap: 1rem; }
+.steps li { counter-increment: s; display: flex; gap: .85rem; }
+.steps li::before { content: counter(s); flex: none; width: 1.7rem; height: 1.7rem; border-radius: 50%;
+  display: grid; place-items: center; font-size: .8rem; font-weight: 700;
+  background: var(--accent-soft); color: var(--accent-text); }
+.steps .body { flex: 1; min-width: 0; padding-top: .15rem; }
+.me { display: flex; gap: 1rem; align-items: center; }
+.me .avatar { width: 3.25rem; height: 3.25rem; font-size: 1.25rem; }
+</style>
+<div class="acct">
+<div class="page-head"><div><h1>Account</h1>
+  <p class="muted small">The Twitch account this bot farms for.</p></div></div>
+{% if error %}<div class="banner bad small"><svg class="i"><use href="#i-alert"/></svg><div class="grow">{{ error }}</div></div>{% endif %}
+{% if state.login_message %}<div class="banner warn small"><svg class="i"><use href="#i-alert"/></svg><div class="grow">{{ state.login_message }}</div></div>{% endif %}
 
 {% if state.account %}
-  <div class="panel">
-    Logged in as <strong>{{ state.account.name }}</strong>
-    <span class="muted small">(user id {{ state.account.user_id }})</span>
-    <form method="post" action="/logout" style="margin-top:.75rem"><button>Log out</button></form>
+  <div class="panel me">
+    <span class="avatar" style="--h: {{ state.account.login | hue }}">{{ state.account.name[:1] }}</span>
+    <div style="flex:1; min-width:0">
+      <div class="small muted">Logged in as</div>
+      <div style="font-weight:700; font-size:1.1rem">{{ state.account.name }}</div>
+      <div class="tiny faint">user id {{ state.account.user_id }}</div>
+    </div>
+    <form method="post" action="/logout"><button>Log out</button></form>
   </div>
 {% else %}
   <div class="panel">
-    <ol style="margin:0; padding-left:1.2rem">
-      <li>On your own PC, open <a href="{{ login_url }}" target="_blank" rel="noopener noreferrer">this Twitch login link</a>
-        and sign in as usual.</li>
-      <li>Twitch then sends you to a page whose address starts with
+    <ol class="steps">
+      <li><div class="body">On your own PC, open the Twitch login and sign in as usual.
+        <div style="margin-top:.5rem"><a class="btn" href="{{ login_url }}" target="_blank" rel="noopener noreferrer"><svg class="i"><use href="#i-link"/></svg>Open Twitch login</a></div></div></li>
+      <li><div class="body">Twitch then sends you to a page whose address starts with
         <code>https://www.twitch.tv/#access_token=</code>. Copy that whole address from the address bar.
-        If the page has already changed it, look in your browser history.</li>
-      <li>Paste it here:</li>
+        If the page has already changed it, look in your browser history.</div></li>
+      <li><div class="body">Paste it here:
+        <form method="post" action="/login" class="row" style="margin-top:.5rem; flex-wrap:nowrap">
+          <input type="text" name="pasted" placeholder="https://www.twitch.tv/#access_token=…" style="flex:1" required autocomplete="off" aria-label="Redirect URL or token">
+          <button class="primary">Log in</button>
+        </form></div></li>
     </ol>
-    <form method="post" action="/login" class="row" style="margin-top:.75rem">
-      <input type="text" name="pasted" placeholder="https://www.twitch.tv/#access_token=…" style="flex:1" required autocomplete="off">
-      <button class="primary">Log in</button>
-    </form>
-    <p class="muted small" style="margin-bottom:0">The token is stored in the bot's database. Anyone who has it can use your Twitch account,
+    <p class="tiny muted" style="margin:1.25rem 0 0">The token is stored in the bot's database. Anyone who has it can use your Twitch account,
       so keep this UI on your local network.</p>
   </div>
 {% endif %}
+</div>
 {% endblock %}

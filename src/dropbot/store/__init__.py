@@ -92,6 +92,16 @@ class Store:
         """Scope Points Channels, campaign selections and history to one Twitch account."""
         self._user = user_id
 
+    async def adopt_unowned(self, user_id: str) -> None:
+        """Give data from before per-account storage (owner '') to this account.
+
+        Migration 0002 assigns existing rows to the stored account; if nobody was logged in
+        at upgrade time they are left with an empty owner, and the next login claims them.
+        """
+        async with self._session.begin() as s:
+            for model in (CampaignStateRow, PointsChannelRow, EventRow):
+                await s.execute(update(model).where(model.user_id == "").values(user_id=user_id))
+
     @property
     def account_id(self) -> str | None:
         return self._user

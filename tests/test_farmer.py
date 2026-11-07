@@ -423,3 +423,14 @@ async def test_other_account_starts_empty(farmer, store, tw):
     await farmer.login("othertoken0123456789abc")
     assert farmer.state.account.login == "someoneelse"
     assert await store.points_channels() == []
+
+
+async def test_first_login_adopts_data_left_unowned_by_the_upgrade(farmer, store, tw):
+    """Upgraded while logged out: migration 0002 left rows with owner ''."""
+    store.use_account("")
+    await store.add_points_channel("1", "legacychannel")
+    await store.record("drop", campaign_id="c1", detail="Old Hat")
+    store.use_account(None)
+    await farmer.login(TOKEN)
+    assert [p.login for p in await store.points_channels()] == ["legacychannel"]
+    assert await store.count_events("drop") == 1

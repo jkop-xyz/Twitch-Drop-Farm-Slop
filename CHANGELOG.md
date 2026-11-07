@@ -11,7 +11,7 @@ Versioning: [SemVer](https://semver.org/).
   - Points Channels, balances, claim history and campaign selections belong to the account that made them.
   - After logging out the UI shows none of it, and logging back in as the same account brings it all back.
   - A different account starts empty and never sees another account's data.
-  - Database migration `0002` assigns existing data to the account that's currently stored.
+  - Database migration `0002` assigns existing data to the account that's currently stored. If nobody is logged in during the upgrade, the next account to log in gets it.
 
 ### Security
 - Added anti-framing headers (`X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`). Without them, another site could frame the UI and trick clicks past the cross-site check.

@@ -128,6 +128,7 @@ class Farmer:
         if token is None:
             raise AuthError("No access token found in what you pasted.")
         info = await self.twitch.validate(token)
+        await self.store.adopt_unowned(info.user_id)
         existing = await self.store.get_account()
         device_id = existing.device_id if existing and existing.device_id else ""
         if not device_id:

@@ -61,6 +61,17 @@ GitHub Actions publishes `ghcr.io/jkop-xyz/twitch-drop-farm-slop` for `linux/amd
 - `sha-<commit>` for each commit
 - `X.Y.Z` and `X.Y` for `vX.Y.Z` tags
 
+Each tagged version also gets a [GitHub release](https://github.com/jkop-xyz/Twitch-Drop-Farm-Slop/releases) whose notes come from [CHANGELOG.md](CHANGELOG.md).
+
+### Rootless
+
+The image runs as an unprivileged user by default: numeric uid `10001`, gid `0`. It never needs root:
+
+- `compose.yaml` additionally makes the root filesystem read-only, drops all Linux capabilities, and sets `no-new-privileges`.
+- To run as a different uid, use `--user <uid>:0` (or `user:` in compose). `/data` is group-writable for gid 0.
+- To bind-mount a host directory instead of a volume, run as the directory's owner, e.g. `--user "$(id -u):$(id -g)"`.
+- It should also work under rootless Docker or Podman, but that hasn't been tested yet.
+
 ## Things to know
 
 - **The web UI has no login.** Keep it on your local network, or put a reverse proxy with auth in front of it ([ADR 0001](docs/adr/0001-no-built-in-web-ui-auth.md)). The database holds your Twitch token, so treat it like a password.
@@ -78,6 +89,13 @@ DATABASE_URL=sqlite:///./dev.db .venv/bin/python -m dropbot
 docker compose up --build                # build the image locally
 ./scripts/lock.sh                        # after changing dependencies: re-pin requirements.lock
 ```
+
+**Releasing:**
+1. Move the `[Unreleased]` notes in `CHANGELOG.md` under a new `## [X.Y.Z] - date` heading.
+2. Bump `version` in `pyproject.toml`.
+3. Commit, then `git tag vX.Y.Z && git push --tags`.
+
+CI checks that the tag, the version and the changelog agree, then publishes the image, then posts the release.
 
 Runtime dependencies are pinned in `requirements.lock`, which the image and CI install from, so builds are reproducible.
 

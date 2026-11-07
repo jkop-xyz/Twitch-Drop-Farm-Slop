@@ -13,9 +13,15 @@ COPY requirements.lock ./
 RUN pip install -r requirements.lock
 COPY pyproject.toml ./
 COPY src ./src
-RUN pip install --no-deps . && useradd --uid 1000 --create-home bot && mkdir -p /data && chown bot /data
+RUN pip install --no-deps .
 
-USER bot
+# Rootless by default: a fixed, numeric, unprivileged uid (so `runAsNonRoot` can verify it),
+# and a /data owned by group 0 so any uid run with `--user <uid>:0` can still write to it.
+RUN useradd --system --uid 10001 --gid 0 --home-dir /data --no-create-home --shell /usr/sbin/nologin bot \
+    && mkdir -p /data && chown 10001:0 /data && chmod 0770 /data
+
+USER 10001:0
+ENV HOME=/data
 VOLUME /data
 ENV PORT=8080
 EXPOSE 8080

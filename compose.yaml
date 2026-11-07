@@ -12,6 +12,14 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - dropbot-data:/data
+    # Runs as uid 10001 (set in the image). Locked down further here:
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   dropbot-data:

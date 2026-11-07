@@ -15,8 +15,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-COPY requirements.lock /tmp/requirements.lock
-RUN pip install -r /tmp/requirements.lock && rm /tmp/requirements.lock
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt && rm /tmp/requirements.txt
 COPY --from=build /wheels /tmp/wheels
 RUN pip install --no-deps /tmp/wheels/*.whl && rm -r /tmp/wheels
 

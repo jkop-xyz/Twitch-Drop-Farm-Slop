@@ -13,6 +13,8 @@ Versioning: [SemVer](https://semver.org/).
 
 ### Changed
 - The image is built in two stages: only the installed wheel ships, with no source tree or build leftovers.
+- `requirements.lock` is renamed `requirements.txt`, so Dependabot recognises it.
+- Dependabot keeps the Python dependencies, GitHub Actions and the Docker base image up to date with weekly grouped PRs. Dependabot alerts and automatic security-fix PRs are enabled for known CVEs.
 
 ## [0.1.0] - 2026-11-07
 

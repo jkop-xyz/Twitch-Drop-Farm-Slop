@@ -87,7 +87,7 @@ python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/ruff check src tests && .venv/bin/ruff format --check src tests
 DATABASE_URL=sqlite:///./dev.db .venv/bin/python -m dropbot
 docker compose up --build                # build the image locally
-./scripts/lock.sh                        # after changing dependencies: re-pin requirements.lock
+./scripts/lock.sh                        # after changing dependencies: re-pin requirements.txt
 ```
 
 **Releasing:**
@@ -97,7 +97,7 @@ docker compose up --build                # build the image locally
 
 CI checks that the tag, the version and the changelog agree, then publishes the image, then posts the release.
 
-Runtime dependencies are pinned in `requirements.lock`, which the image and CI install from, so builds are reproducible.
+Runtime dependencies are pinned in `requirements.txt`, which the image and CI install from, so builds are reproducible.
 
 | Path | What |
 |---|---|

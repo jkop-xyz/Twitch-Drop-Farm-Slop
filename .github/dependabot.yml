@@ -1,0 +1,35 @@
+# Dependabot version updates. Security updates for known CVEs are separate and enabled in the
+# repo settings (Dependabot alerts + security updates); they open PRs as soon as an advisory
+# affects a pinned version, regardless of this schedule.
+version: 2
+updates:
+  # Pinned runtime dependencies (requirements.txt) and the ranges in pyproject.toml.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    groups:
+      python-minor-and-patch:
+        update-types: [minor, patch]
+
+  # Actions used by .github/workflows/ci.yml.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies]
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Base image (python:3.13-slim) in the Dockerfile.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies]

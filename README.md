@@ -22,7 +22,8 @@ It only farms passively. It never spends, bets or predicts anything. It's inspir
 
 - **You choose what to farm.** New campaigns appear unselected with a "new" badge. Campaigns that need a linked game account say so, and aren't farmed until you link it.
 - **Deadline first.** With several selected campaigns, the one ending soonest is farmed first. Each finished Drop is claimed automatically.
-- **Two Watch Slots.** Twitch credits about 2 streams at once. Drops get the first slot, and your highest-ranked live Points Channels get the rest. A stream that counts for both earns both. While a Drop is being farmed, the points slot skips streams that have Drops for a different campaign, because Twitch would move your Drop progress to them.
+- **Drops first, then points.** While a Drop is being farmed, only its stream is watched: Twitch credits Drop progress to one channel at a time, and a second stream can keep the Drop from progressing. The Drop stream still earns points if it's on your Points Channels list, and is preferred for exactly that reason. With no Drop to farm, your two highest-ranked live Points Channels are watched. Set `POINTS_DURING_DROPS=1` to watch a Points Channel next to the Drop anyway; streams with Drops for another campaign are then still skipped.
+- **Stalled Drops are flagged.** If Twitch stops counting a Drop's minutes for 5 minutes, the Watch Slot and the log say so.
 - **Channel Points.** Balances for each channel and what the bot earned per week. You can check your balance on any channel and import your follows.
 - **Drag to rank.** Reorder your Points Channels by dragging, on desktop or phone, or with the arrow keys.
 - **Skips channels without Channel Points.** Channels that have them turned off are greyed out and only watched when one is the stream for a Drop.
@@ -85,6 +86,7 @@ All configuration is through environment variables, for example in a `.env` next
 | `DATABASE_URL` | SQLite at `/data/bot.db` | e.g. `postgresql://user:pass@host:5432/dropbot` |
 | `PORT` | `8080` | web UI port |
 | `LOG_LEVEL` | `INFO` | |
+| `POINTS_DURING_DROPS` | `0` | `1`: also watch a Points Channel while a Drop is farmed (may stall the Drop, see Features) |
 
 Database migrations run automatically on startup.
 

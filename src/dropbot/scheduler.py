@@ -34,6 +34,10 @@ class Snapshot:
     # Channel currently watched for a Drop, used to avoid needless switching.
     current_drop_channel: str | None = None
     slots: int = WATCH_SLOTS
+    # Also fill the other Watch Slots with Points Channels while a Drop is being farmed.
+    # Off by default: Twitch credits Drop progress to one channel at a time, and a second
+    # stream started next to the Drop stream has been seen to keep the Drop from progressing.
+    points_beside_drop: bool = False
 
 
 def farmable_campaigns(snap: Snapshot) -> list[Campaign]:
@@ -97,9 +101,13 @@ def plan(snap: Snapshot) -> Plan:
             break
 
     taken = {s.stream.channel_id for s in slots}
+    if farming is not None and not snap.points_beside_drop:
+        free = 0  # only the Drop stream (it still earns points if it's a Points Channel)
+    else:
+        free = snap.slots
     # A channel with Channel Points turned off earns nothing here: it's only watched for a Drop.
     for pc in sorted(snap.points_channels, key=lambda p: p.rank):
-        if len(slots) >= snap.slots:
+        if len(slots) >= free:
             break
         if pc.points_off:
             continue

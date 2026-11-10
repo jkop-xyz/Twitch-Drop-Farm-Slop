@@ -161,6 +161,7 @@ async def test_watch_report_notice(env):
 
 async def test_watch_slot_shows_channel_points(env):
     farmer, tw, store, c = env
+    farmer.points_during_drops = True
     await farmer.login(TOKEN)
     tw.campaign_list = [campaign("c1")]
     tw.go_live(stream("drop", viewers=999))

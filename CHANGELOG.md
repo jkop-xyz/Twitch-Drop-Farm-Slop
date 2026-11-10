@@ -6,6 +6,18 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-10
+
+Drops progress again: while a Drop is farmed, only its stream is watched.
+
+### Changed
+- **While a Drop is being farmed, only the Drop stream is watched.** Twitch credits Drop progress to one channel at a time, and since its October change it decides what you watch from the video requests. Seen live: with the Drop stream (Freyja) and a points stream (forsen, Just Chatting, no Drops) started together, the Drop stayed at 15 minutes for over half an hour; Freyja watched on its own progressed a minute per minute. TwitchDropsMiner also watches a single stream. The Drop stream still earns Channel Points if it's on your list (Points Channels are preferred for the Drop stream for this reason), and both Watch Slots go to points again as soon as no Drop is farmed.
+  - Set `POINTS_DURING_DROPS=1` to get the old behaviour. Streams with Drops for another campaign are still skipped then (v0.5.2).
+
+### Added
+- **Stalled Drop warning.** When the farmed Drop's progress hasn't moved for 5 minutes, the log says so (`Drop progress on … hasn't moved for 5 min`) and the Watch Slot shows "Twitch hasn't counted progress since …".
+- `scripts/diagnose_watch.py` shows what Twitch sees during one watch cycle (token, IP, clock, segment requests, Drop progress). Run it inside the container; see the comment at the top.
+
 ## [0.5.2] - 2026-11-10
 
 Fixes Drops that stopped progressing after a few minutes.

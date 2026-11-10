@@ -230,6 +230,9 @@ async def test_drop_takes_priority_over_points(farmer, store, tw):
     await farmer.tick()
     await store.set_selected("c1", True)
     await farmer.tick()
+    assert watching(farmer) == ["drops"]  # by default the Drop stream is watched alone
+    farmer.points_during_drops = True  # POINTS_DURING_DROPS=1
+    await farmer.tick()
     assert watching(farmer) == ["drops", "p1"]
 
 
@@ -237,6 +240,7 @@ async def test_points_off_channel_is_detected_before_planning_and_only_watched_f
     farmer, store, tw
 ):
     await logged_in(farmer)
+    farmer.points_during_drops = True
     for cid in ("1", "2", "3"):
         tw.go_live(stream(cid, game=None, drops_enabled=False))
         tw.balances[f"user{cid}"] = 100
@@ -503,3 +507,23 @@ async def test_first_login_adopts_data_left_unowned_by_the_upgrade(farmer, store
     await farmer.login(TOKEN)
     assert [p.login for p in await store.points_channels()] == ["legacychannel"]
     assert await store.count_events("drop") == 1
+
+
+async def test_drop_progress_that_stops_moving_is_flagged(farmer, store, tw, caplog):
+    await logged_in(farmer)
+    tw.campaign_list = [campaign("c1", drops=[drop("c1-d1", required=60, current=15)])]
+    tw.go_live(stream("1"))
+    tw.drop_sessions["1"] = DropSession("c1-d1", 15)
+    await farmer.tick()
+    await store.set_selected("c1", True)
+    for _ in range(5):
+        await farmer.tick()
+        farmer.clock.now += timedelta(minutes=1)
+    assert farmer.state.drop_stalled_since is None
+    farmer.clock.now += timedelta(minutes=1)
+    await farmer.tick()
+    assert farmer.state.drop_stalled_since is not None
+    assert "hasn't moved for" in caplog.text
+    tw.drop_sessions["1"] = DropSession("c1-d1", 16)  # counting again
+    await farmer.tick()
+    assert farmer.state.drop_stalled_since is None

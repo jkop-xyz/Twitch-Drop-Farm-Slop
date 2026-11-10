@@ -76,6 +76,7 @@
             <div class="reward">{{ s.campaign.name }}</div>
           {% endif %}
           <div class="tiny faint" style="margin-top:.2rem">{{ s.campaign.name }} · ends {{ s.campaign.ends_at | until }}</div>
+          {% if s.stalled_since %}<div class="tiny" style="margin-top:.35rem; color:var(--warn)" title="Twitch adds a minute for every minute watched. Check the log for details."><svg class="i"><use href="#i-alert"/></svg> Twitch hasn't counted progress since {{ s.stalled_since | until }}.</div>{% endif %}
         </div>
       </div>
     {% endif %}

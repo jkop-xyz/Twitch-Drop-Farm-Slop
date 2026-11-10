@@ -5,6 +5,7 @@ Configuration is by environment variable only:
   PORT          web UI port (default 8080)
   HOST          bind address (default 0.0.0.0)
   LOG_LEVEL     DEBUG / INFO / WARNING (default INFO)
+  POINTS_DURING_DROPS  1 to also watch Points Channels while a Drop is farmed (default 0)
 """
 
 from __future__ import annotations
@@ -25,7 +26,8 @@ from .web.app import create_app
 def build_app():
     store = Store(os.environ.get("DATABASE_URL"))
     twitch = TwitchClient()
-    farmer = Farmer(store, twitch)
+    points_during_drops = os.environ.get("POINTS_DURING_DROPS", "").lower() in ("1", "true", "yes")
+    farmer = Farmer(store, twitch, points_during_drops=points_during_drops)
 
     @asynccontextmanager
     async def lifespan(_app):

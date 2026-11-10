@@ -21,6 +21,8 @@ log = logging.getLogger(__name__)
 
 TICK = timedelta(seconds=60)
 CAMPAIGN_REFRESH = timedelta(minutes=15)
+# Twitch adds a minute per watched minute; this long without change means it isn't counting.
+DROP_STALL_AFTER = timedelta(minutes=5)
 # Balances of Points Channels that aren't being watched are refreshed this often.
 BALANCE_REFRESH = timedelta(minutes=30)
 # A stream that fails to watch this many times in a row is skipped for SKIP_FOR
@@ -54,6 +56,8 @@ class FarmerState:
     slot_points_off: set[str] = field(default_factory=set)
     # Profile pictures of watched channels, by channel id (Points Channels' are also stored).
     avatars: dict[str, str] = field(default_factory=dict)
+    # Since when the farmed Drop's progress hasn't moved (set after DROP_STALL_AFTER).
+    drop_stalled_since: datetime | None = None
     balances_at: datetime | None = None
     campaigns: list[Campaign] = field(default_factory=list)
     campaigns_at: datetime | None = None
@@ -70,11 +74,13 @@ class Farmer:
         *,
         clock: Callable[[], datetime] = utcnow,
         slots: int = WATCH_SLOTS,
+        points_during_drops: bool = False,
     ) -> None:
         self.store = store
         self.twitch = twitch
         self.clock = clock
         self.slots = slots
+        self.points_during_drops = points_during_drops
         self.state = FarmerState()
         self._wake = asyncio.Event()
         self._force_campaigns = True
@@ -85,6 +91,7 @@ class Farmer:
         self._points_checked: set[str] = set()
         # Last (channel id, Drop session) logged, so progress is logged only when it changes.
         self._last_drop_session: tuple[str, DropSession | None] | None = None
+        self._drop_unchanged_since: datetime = clock()
 
     # --- lifecycle -------------------------------------------------------------------------
 
@@ -180,6 +187,7 @@ class Farmer:
         st.campaigns_at = None
         st.live = {}
         st.slot_balances = {}
+        st.drop_stalled_since = None
         st.slot_points_off = set()
         st.avatars = {}
         st.skipped = {}
@@ -346,18 +354,15 @@ class Farmer:
         watchable = {cid: s for cid, s in live.items() if cid not in st.skipped}
 
         current = st.plan.drop_slot.stream.channel_id if st.plan.drop_slot else None
-        new_plan = plan(
-            Snapshot(now, st.campaigns, selected, watchable, points_channels, current, self.slots)
-        )
+        new_plan = plan(self._snapshot(now, selected, watchable, points_channels, current))
 
         if new_plan.drop_slot:
             await self._update_drop_progress(new_plan.drop_slot)
             # Progress may have finished a Drop: plan again so it gets claimed this tick.
-            new_plan = plan(
-                Snapshot(
-                    now, st.campaigns, selected, watchable, points_channels, current, self.slots
-                )
-            )
+            new_plan = plan(self._snapshot(now, selected, watchable, points_channels, current))
+        else:
+            self._last_drop_session = None
+            st.drop_stalled_since = None
 
         claimed_any = False
         for campaign_id, drop in new_plan.claims:
@@ -376,11 +381,7 @@ class Farmer:
                 claimed_any = True
         if claimed_any:
             # Claims can finish a campaign or unlock the next Drop: plan once more.
-            new_plan = plan(
-                Snapshot(
-                    now, st.campaigns, selected, watchable, points_channels, current, self.slots
-                )
-            )
+            new_plan = plan(self._snapshot(now, selected, watchable, points_channels, current))
 
         if new_plan.deselect:
             await self.store.deselect(new_plan.deselect)
@@ -445,12 +446,27 @@ class Farmer:
             return None
         return user, await self.twitch.points(user.login)
 
+    def _snapshot(self, now, selected, watchable, points_channels, current) -> Snapshot:
+        return Snapshot(
+            now,
+            self.state.campaigns,
+            selected,
+            watchable,
+            points_channels,
+            current,
+            self.slots,
+            points_beside_drop=self.points_during_drops,
+        )
+
     async def _update_drop_progress(self, slot: SlotAssignment) -> None:
         assert isinstance(slot.reason, DropReason)
         session = await self.twitch.current_drop(slot.stream.channel_id)
         seen = (slot.stream.channel_id, session)
+        now = self.clock()
         if seen != self._last_drop_session:  # log changes only, not every tick
             self._last_drop_session = seen
+            self.state.drop_stalled_since = None
+            self._drop_unchanged_since = now
             if session is None:
                 log.info("no Drop progress reported for %s yet", slot.stream.name)
             else:
@@ -460,6 +476,18 @@ class Farmer:
                     session.drop_id,
                     session.current_minutes,
                 )
+        elif (
+            self.state.drop_stalled_since is None
+            and now - self._drop_unchanged_since >= DROP_STALL_AFTER
+        ):
+            self.state.drop_stalled_since = self._drop_unchanged_since
+            log.warning(
+                "Drop progress on %s hasn't moved for %d min (still %s); Twitch isn't counting"
+                " this watch time",
+                slot.stream.name,
+                (now - self._drop_unchanged_since).total_seconds() // 60,
+                f"{session.current_minutes} min" if session else "none reported",
+            )
         if session is None:
             return
         st = self.state

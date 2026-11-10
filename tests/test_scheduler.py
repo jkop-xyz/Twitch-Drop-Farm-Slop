@@ -6,7 +6,9 @@ from dropbot.scheduler import Snapshot, plan
 from .factories import NOW, OTHER_GAME, campaign, drop, live, points, stream
 
 
-def snap(campaigns=(), selected=None, streams=(), pts=(), current=None, slots=2, off=()):
+def snap(
+    campaigns=(), selected=None, streams=(), pts=(), current=None, slots=2, off=(), beside=False
+):
     sel = frozenset(c.id for c in campaigns) if selected is None else frozenset(selected)
     return Snapshot(
         now=NOW,
@@ -16,6 +18,7 @@ def snap(campaigns=(), selected=None, streams=(), pts=(), current=None, slots=2,
         points_channels=points(*pts, off=off),
         current_drop_channel=current,
         slots=slots,
+        points_beside_drop=beside,
     )
 
 
@@ -137,14 +140,14 @@ def test_points_channel_going_live_takes_drop_slot_from_non_points_stream():
 def test_drop_slot_comes_before_points_channels():
     c = campaign("c1", allowed={"d"})
     plain = [stream(x, game=None, drops_enabled=False) for x in ("p1", "p2")]
-    p = plan(snap([c], streams=[stream("d"), *plain], pts=["p1", "p2"]))
+    p = plan(snap([c], streams=[stream("d"), *plain], pts=["p1", "p2"], beside=True))
     assert watched(p) == ["d", "p1"]
     assert isinstance(p.slots[1].reason, PointsReason)
 
 
 def test_shared_drop_and_points_stream_frees_a_slot_for_next_points_channel():
     c = campaign("c1")
-    p = plan(snap([c], streams=[stream("p1"), stream("p2")], pts=["p1", "p2"]))
+    p = plan(snap([c], streams=[stream("p1"), stream("p2")], pts=["p1", "p2"], beside=True))
     assert watched(p) == ["p1", "p2"]
     assert p.slots[0].reason == DropReason("c1", also_points=True)
 
@@ -154,15 +157,28 @@ def test_without_farmable_campaign_both_slots_go_to_points():
     assert watched(p) == ["p1", "p2"]
 
 
+def test_only_the_drop_stream_is_watched_while_a_drop_is_farmed():
+    # Seen live: Freyja (Drop) and forsen (points) started together and the Drop never moved;
+    # Freyja alone progressed. The Drop stream still earns points if it's a Points Channel.
+    c = campaign("c1")
+    plain = stream("p2", game=None, drops_enabled=False)
+    p = plan(snap([c], streams=[stream("d"), plain], pts=["p2"]))
+    assert watched(p) == ["d"]
+    shared = plan(snap([c], streams=[stream("p1"), plain], pts=["p1", "p2"]))
+    assert watched(shared) == ["p1"] and shared.drop_slot.reason.also_points
+    # Without a Drop to farm, both slots go to points as usual.
+    assert watched(plan(snap([], streams=[stream("p1"), plain], pts=["p1", "p2"]))) == ["p1", "p2"]
+
+
 def test_points_stream_with_its_own_drops_is_skipped_while_a_drop_is_farmed():
     # Seen live: watching a WoW stream (active WoW campaign) next to the Drop stream moved
     # the Drop progress to WoW, and the selected campaign stopped progressing.
     c = campaign("c1")
     other = stream("p1", game=OTHER_GAME, drops_enabled=True)
     plain = stream("p2", game=None, drops_enabled=False)
-    p = plan(snap([c], streams=[stream("d"), other, plain], pts=["p1", "p2"]))
+    p = plan(snap([c], streams=[stream("d"), other, plain], pts=["p1", "p2"], beside=True))
     assert watched(p) == ["d", "p2"]
-    only = plan(snap([c], streams=[stream("d"), other], pts=["p1"]))
+    only = plan(snap([c], streams=[stream("d"), other], pts=["p1"], beside=True))
     assert watched(only) == ["d"]  # better an empty slot than a stalled Drop
     # With no Drop being farmed it's an ordinary points stream again.
     assert watched(plan(snap([], streams=[other, plain], pts=["p1", "p2"]))) == ["p1", "p2"]

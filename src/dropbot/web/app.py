@@ -147,6 +147,9 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
                 "points": not isinstance(s.reason, DropReason) or s.reason.also_points,
                 "balance": st.slot_balances.get(s.stream.channel_id),
                 "points_off": s.stream.channel_id in st.slot_points_off,
+                "stalled_since": st.drop_stalled_since
+                if isinstance(s.reason, DropReason)
+                else None,
                 "avatar_url": st.avatars.get(s.stream.channel_id)
                 or avatars.get(s.stream.channel_id),
             }

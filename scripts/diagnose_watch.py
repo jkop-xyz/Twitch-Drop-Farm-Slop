@@ -62,6 +62,13 @@ async def main(login: str) -> None:
             sys.exit("PlaybackAccessToken: Twitch returned no token")
         value = json.loads(tok["value"])
         token_user = str(value.get("user_id") or "")
+        dev = account.device_id or ""
+        token_dev = str(value.get("device_id") or "")
+        print(
+            f"device id: stored {dev[:6] + '…' if dev else '(none!)'} ({len(dev)} chars), "
+            f"in token {token_dev[:6] + '…' if token_dev else '(none!)'}"
+            f"{'' if token_dev == dev else '  <-- DIFFERENT'}"
+        )
         print(
             f"playback token: user_id={token_user or '(none!)'} "
             f"{'= your account' if token_user == account.user_id else '≠ YOUR ACCOUNT'}, "

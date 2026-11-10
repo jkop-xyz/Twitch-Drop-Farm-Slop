@@ -6,6 +6,10 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- "paused for your Drop" now marks every live Points Channel that waits while a Drop is farmed, not only those with Drops of their own. Hover over it to see which reason applies. The Points Channels subtitle describes the new watching rule.
+- README screenshots updated for v0.6.0's one-stream-while-farming-a-Drop behaviour.
+
 ## [0.6.0] - 2026-11-10
 
 Drops progress again: while a Drop is farmed, only its stream is watched.

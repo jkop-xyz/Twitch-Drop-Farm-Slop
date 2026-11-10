@@ -233,9 +233,8 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
         """Accept "name", "@name" or a twitch.tv URL."""
         return raw.strip().rstrip("/").lstrip("@").rsplit("/", 1)[-1].lower()
 
-    def competing_drops() -> dict[str, str]:
-        """Live channels left out because their Drops would take progress from the farmed one,
-        mapped to the name of the campaign being farmed."""
+    def paused_for_drop() -> dict[str, str]:
+        """Live channels left out so the farmed Drop keeps progressing, with the reason."""
         st = farmer.state
         slot = st.plan.drop_slot
         if slot is None or not isinstance(slot.reason, DropReason):
@@ -243,7 +242,20 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
         c = next((c for c in st.campaigns if c.id == slot.reason.campaign_id), None)
         if c is None:
             return {}
-        return {cid: c.name for cid, s in st.live.items() if competes(s, c)}
+        own = (
+            "This stream has Drops of its own. Twitch credits Drop progress to one channel at"
+            f" a time, so watching it would stall {c.name}."
+        )
+        solo = (
+            f"While {c.name} is being farmed, only its stream is watched: Twitch credits Drop"
+            " progress to one channel at a time, and a second stream can stall it."
+        )
+        after = " It's watched again once no Drop is being farmed."
+        return {
+            cid: (own if competes(s, c) else solo) + after
+            for cid, s in st.live.items()
+            if competes(s, c) or not farmer.points_during_drops
+        }
 
     @app.get("/channels", response_class=HTMLResponse)
     async def channels_page(request: Request, error: str = "", check: str = ""):
@@ -273,7 +285,7 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
             on_list={c.channel.channel_id for c in channels},
             watched={s.stream.channel_id for s in farmer.state.plan.slots},
             skipped=farmer.state.skipped,
-            competing=competing_drops(),
+            paused=paused_for_drop(),
         )
 
     @app.post("/channels/balances")

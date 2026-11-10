@@ -200,6 +200,8 @@ async def main() -> None:
                 replace(stream(cid, game=game, viewers=viewers), login=login, display_name=name)
             )
         await store.add_points_channel(cid, login, name)
+    # The Drop stream is on the list too, so its one Watch Slot earns the Drop and points.
+    await store.add_points_channel("c9", "siegequeen", "SiegeQueen")
     tw.users["starlitsam"] = UserInfo("c10", "starlitsam", "StarlitSam")  # for the balance check
     tw.balances["starlitsam"] = 2350
     tw.avatars["starlitsam"] = avatar(3, 50)

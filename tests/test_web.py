@@ -343,3 +343,20 @@ async def test_points_channel_with_competing_drops_says_why_it_is_not_watched(en
     await farmer.tick()
     assert [s.stream.channel_id for s in farmer.state.plan.slots] == ["d"]
     assert "paused for your Drop" in (await c.get("/channels")).text
+
+
+async def test_every_live_points_channel_is_marked_paused_while_a_drop_is_farmed(env):
+    farmer, tw, store, c = env
+    await farmer.login(TOKEN)
+    tw.campaign_list = [campaign("c1", allowed={"d"})]
+    tw.go_live(stream("d"))
+    tw.go_live(stream("p2", game=None, drops_enabled=False))  # no Drops: paused only by solo mode
+    await store.add_points_channel("p2", "userp2")
+    await farmer.tick()
+    await store.set_selected("c1", True)
+    await farmer.tick()
+    html = (await c.get("/channels")).text
+    assert "paused for your Drop" in html and "only its stream is watched" in html
+    farmer.points_during_drops = True
+    await farmer.tick()
+    assert "paused for your Drop" not in (await c.get("/channels")).text

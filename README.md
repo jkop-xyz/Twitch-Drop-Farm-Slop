@@ -16,7 +16,7 @@ It only farms passively. It never spends, bets or predicts anything. It's inspir
 > [!CAUTION]
 > Automated watching is against Twitch's terms of service. Use it at your own risk, and only on your own account.
 
-![Dashboard: two Watch Slots (one farming a Drop, one farming Channel Points), balances per channel and recent claims](docs/screenshots/dashboard.png)
+![Dashboard: the Drop stream in its Watch Slot, earning the Drop and Channel Points at once, with balances per channel and recent claims](docs/screenshots/dashboard.png)
 
 ## Features
 
@@ -43,7 +43,7 @@ All screenshots use made-up channels and data (see [Development](#development)).
 
 ![Campaign search for "skin" showing 1 of 6 campaigns](docs/screenshots/campaigns-search.png)
 
-**Points Channels.** Your ranked list with live status, balances and a total. Channels with Channel Points turned off are greyed out. The box at the top right checks your balance on any channel.
+**Points Channels.** Your ranked list with live status, balances and a total. Channels with Channel Points turned off are greyed out, and live channels waiting while a Drop is farmed say so. The box at the top right checks your balance on any channel.
 
 ![Points Channels list with live status, balances, two greyed-out channels and a balance check result](docs/screenshots/channels.png)
 

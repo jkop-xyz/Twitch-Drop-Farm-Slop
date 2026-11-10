@@ -43,7 +43,7 @@ tbody tr.saved td { animation: saved 1s ease-out; }
 <div class="page-head">
   <div>
     <h1>Points Channels</h1>
-    <p class="muted small">Ranked: the highest-ranked live channels get the Watch Slots Drops aren't using. Drag <svg class="i" style="vertical-align:-.15em"><use href="#i-grip"/></svg> to reorder.</p>
+    <p class="muted small">Ranked: the highest-ranked live channels are watched whenever no Drop is being farmed. Drag <svg class="i" style="vertical-align:-.15em"><use href="#i-grip"/></svg> to reorder.</p>
   </div>
   <div class="row">
     <form method="post" action="/channels/import"><button class="ghost"><svg class="i"><use href="#i-import"/></svg>Import follows</button></form>
@@ -104,7 +104,7 @@ tbody tr.saved td { animation: saved 1s ease-out; }
     <td class="col-status">
       {% if s %}<span class="status"><span class="dot live"></span>Live <span class="game">· {{ s.game_name }}</span></span>
         {% if c.channel.channel_id in watched %}<span class="badge ok" style="margin-left:.3rem"><svg class="i"><use href="#i-eye"/></svg>watching</span>{% endif %}
-        {% if c.channel.channel_id in competing and c.channel.channel_id not in watched %}<span class="badge" style="margin-left:.3rem" title="This stream has Drops of its own. Twitch credits Drop progress to one channel at a time, so watching it would stall {{ competing[c.channel.channel_id] }}. It's watched again once no Drop is being farmed.">paused for your Drop</span>{% endif %}
+        {% if c.channel.channel_id in paused and c.channel.channel_id not in watched and not c.channel.points_off %}<span class="badge" style="margin-left:.3rem" title="{{ paused[c.channel.channel_id] }}">paused for your Drop</span>{% endif %}
         {% if c.channel.channel_id in skipped %}<span class="badge warn" style="margin-left:.3rem" title="Watching kept failing (sub-only, region-locked, ...). Retrying {{ skipped[c.channel.channel_id] | until }}.">can't watch, skipped</span>{% endif %}
       {% else %}<span class="status muted"><span class="dot"></span>Offline</span>{% endif %}
     </td>

@@ -6,6 +6,10 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Screenshots of the UI in the README.
+- `scripts/demo.py` runs the web UI with made-up data and no Twitch account, and `scripts/screenshots.mjs` regenerates the README screenshots from it.
+
 ## [0.5.0] - 2026-11-07
 
 Channel profile pictures.

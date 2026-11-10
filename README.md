@@ -16,15 +16,50 @@ It only farms passively. It never spends, bets or predicts anything. It's inspir
 > [!CAUTION]
 > Automated watching is against Twitch's terms of service. Use it at your own risk, and only on your own account.
 
+![Dashboard: two Watch Slots (one farming a Drop, one farming Channel Points), balances per channel and recent claims](docs/screenshots/dashboard.png)
+
 ## Features
 
 - **You choose what to farm.** New campaigns appear unselected with a "new" badge. Campaigns that need a linked game account say so, and aren't farmed until you link it.
 - **Deadline first.** With several selected campaigns, the one ending soonest is farmed first. Each finished Drop is claimed automatically.
 - **Two Watch Slots.** Twitch credits about 2 streams at once. Drops get the first slot, and your highest-ranked live Points Channels get the rest. A stream that counts for both earns both.
 - **Channel Points.** Balances for each channel and what the bot earned per week. You can check your balance on any channel and import your follows.
+- **Drag to rank.** Reorder your Points Channels by dragging, on desktop or phone, or with the arrow keys.
+- **Skips channels without Channel Points.** Channels that have them turned off are greyed out and only watched when one is the stream for a Drop.
 - **Search** across 100+ campaigns, by game, campaign or reward.
 - **Postgres or SQLite.** Point it at your Postgres server, or let it use SQLite in the data volume.
 - **No video is downloaded.** Watching is simulated with lightweight playlist and analytics requests.
+
+## Screenshots
+
+All screenshots use made-up channels and data (see [Development](#development)).
+
+**Drop Campaigns.** Switch on the campaigns you want. Each card shows its Drops and your progress, and warns when a game account still needs linking.
+
+![Drop Campaigns grouped by game, with toggle switches, Drop progress and an account-link warning](docs/screenshots/campaigns.png)
+
+**Search and filter** by game, campaign or reward:
+
+![Campaign search for "skin" showing 1 of 6 campaigns](docs/screenshots/campaigns-search.png)
+
+**Points Channels.** Your ranked list with live status, balances and a total. Channels with Channel Points turned off are greyed out. The box at the top right checks your balance on any channel.
+
+![Points Channels list with live status, balances, two greyed-out channels and a balance check result](docs/screenshots/channels.png)
+
+**Drag and drop** a row by its handle to change the ranking:
+
+![A Points Channels row being dragged to a new position](docs/screenshots/channels-drag.png)
+
+**Dark mode and phones.** The UI follows your system theme and fits on a phone.
+
+<p>
+  <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard in dark mode" width="66%">
+  <img src="docs/screenshots/mobile.png" alt="Dashboard on a phone" width="30%">
+</p>
+
+**Logging in.** Sign in to Twitch on your own PC, then paste the address Twitch sends you to.
+
+![Account page with the three login steps](docs/screenshots/login.png)
 
 ## Quick start
 
@@ -88,7 +123,10 @@ python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 DATABASE_URL=sqlite:///./dev.db .venv/bin/python -m dropbot
 docker compose up --build                # build the image locally
 ./scripts/lock.sh                        # after changing dependencies: re-pin requirements.txt
+.venv/bin/python scripts/demo.py         # the UI with made-up data on :8095, no Twitch account needed
 ```
+
+**Screenshots:** start `scripts/demo.py` and a headless Chrome with `--remote-debugging-port=9333`, then run `node scripts/screenshots.mjs`. It rewrites `docs/screenshots/`. The comment at the top of the script has the exact commands.
 
 **Releasing:**
 1. Move the `[Unreleased]` notes in `CHANGELOG.md` under a new `## [X.Y.Z] - date` heading.

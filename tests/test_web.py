@@ -320,3 +320,11 @@ async def test_account_actions_while_logged_out_redirect_to_login(env):
     assert r.status_code == 303 and r.headers["location"].startswith("/login?error=")
     r = await c.post("/campaigns/c1/select", data={"selected": "1"})
     assert r.status_code == 303 and r.headers["location"].startswith("/login?error=")
+
+
+async def test_version_is_shown_in_footer_and_healthz(env):
+    from dropbot import __version__
+
+    _, _, _, c = env
+    assert f"v{__version__}" in (await c.get("/login")).text
+    assert (await c.get("/healthz")).json()["version"] == __version__

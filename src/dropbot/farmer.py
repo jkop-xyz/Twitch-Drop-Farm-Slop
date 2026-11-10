@@ -13,6 +13,7 @@ from .domain import Campaign, DropReason, Plan, PointsChannel, SlotAssignment, S
 from .scheduler import WATCH_SLOTS, Snapshot, farmable_campaigns, plan
 from .store import Account, Store
 from .twitch import AuthError, PointsState, ProtocolError, TransientError, TwitchApi, UserInfo
+from .twitch.api import DropSession
 from .twitch.parse import extract_token
 from .twitch.protocol import SPADE_INTERVAL_S, WATCH_INTERVAL_S
 
@@ -82,6 +83,8 @@ class Farmer:
         self._watch_failures: dict[str, int] = {}
         # Points Channels whose Channel Points state was looked up this session (see _tick).
         self._points_checked: set[str] = set()
+        # Last (channel id, Drop session) logged, so progress is logged only when it changes.
+        self._last_drop_session: tuple[str, DropSession | None] | None = None
 
     # --- lifecycle -------------------------------------------------------------------------
 
@@ -445,6 +448,18 @@ class Farmer:
     async def _update_drop_progress(self, slot: SlotAssignment) -> None:
         assert isinstance(slot.reason, DropReason)
         session = await self.twitch.current_drop(slot.stream.channel_id)
+        seen = (slot.stream.channel_id, session)
+        if seen != self._last_drop_session:  # log changes only, not every tick
+            self._last_drop_session = seen
+            if session is None:
+                log.info("no Drop progress reported for %s yet", slot.stream.name)
+            else:
+                log.info(
+                    "Drop progress on %s: %s at %d min",
+                    slot.stream.name,
+                    session.drop_id,
+                    session.current_minutes,
+                )
         if session is None:
             return
         st = self.state

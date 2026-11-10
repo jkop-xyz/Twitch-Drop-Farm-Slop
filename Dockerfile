@@ -32,6 +32,11 @@ VOLUME /data
 ENV PORT=8080
 EXPOSE 8080
 
+# The commit this image was built from, shown in the web UI footer. Set last: it changes on
+# every build, and the layers above stay cached.
+ARG REVISION=""
+ENV DROPBOT_REVISION=$REVISION
+
 HEALTHCHECK --interval=60s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8080\")}/healthz', timeout=4)"
 

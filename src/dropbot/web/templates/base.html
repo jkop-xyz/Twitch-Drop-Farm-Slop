@@ -43,6 +43,9 @@ svg.i { width: 1em; height: 1em; vertical-align: -.125em; flex: none; }
 
 /* --- shell --- */
 .wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; }
+.foot { display: flex; flex-wrap: wrap; gap: .4rem 1rem; justify-content: space-between; padding-block: 1.5rem 2rem;
+  margin-top: 1.5rem; border-top: 1px solid var(--line-2); font-size: .78rem; color: var(--faint); }
+.foot a { color: var(--muted); }
 header.top { position: sticky; top: 0; z-index: 10;
   background: color-mix(in srgb, var(--panel) 82%, transparent);
   backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px);
@@ -238,5 +241,9 @@ td.num, th.num { text-align: right; }
 {% endif %}
 {% block content %}{% endblock %}
 </main>
+<footer class="wrap foot">
+  <span>Drop Farm <a href="https://github.com/jkop-xyz/Twitch-Drop-Farm-Slop/releases/tag/v{{ version }}" target="_blank" rel="noopener" title="Release notes for this version">{{ version_label }}</a></span>
+  <a href="https://github.com/jkop-xyz/Twitch-Drop-Farm-Slop/releases/latest" target="_blank" rel="noopener">Latest release</a>
+</footer>
 </body>
 </html>

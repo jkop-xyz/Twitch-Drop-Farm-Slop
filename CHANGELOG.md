@@ -6,7 +6,13 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-10
+
+Shows which version is running.
+
 ### Added
+- **Version footer** on every page, e.g. `Drop Farm v0.5.1 (bffa3dc)`, linking to that version's release notes. The commit in brackets shows on images built by CI. `/healthz` also reports `version` and `revision`, and the version is logged at startup.
+- The log records Drop progress as Twitch reports it, e.g. `Drop progress on Freyja: … at 6 min`, logged only when it changes.
 - Screenshots of the UI in the README.
 - `scripts/demo.py` runs the web UI with made-up data and no Twitch account, and `scripts/screenshots.mjs` regenerates the README screenshots from it.
 

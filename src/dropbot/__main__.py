@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 
+from . import version_label
 from .farmer import Farmer
 from .store import Store
 from .twitch.client import TwitchClient
@@ -50,6 +51,7 @@ def main() -> None:
     )
     # Twitch request logs are noisy at INFO.
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger(__name__).info("dropbot %s", version_label())
     uvicorn.run(
         build_app(),
         host=os.environ.get("HOST", "0.0.0.0"),

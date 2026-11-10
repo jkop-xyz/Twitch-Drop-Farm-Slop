@@ -19,6 +19,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from .. import REVISION, __version__, version_label
 from ..domain import Campaign, DropReason
 from ..farmer import Farmer
 from ..store import NoAccount
@@ -84,6 +85,8 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
     )
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
+    templates.env.globals["version"] = __version__
+    templates.env.globals["version_label"] = version_label()
     store = farmer.store
 
     @app.exception_handler(NoAccount)
@@ -348,7 +351,12 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
     async def healthz():
         st = farmer.state
         return JSONResponse(
-            {"status": st.status, "last_tick": st.last_tick.isoformat() if st.last_tick else None}
+            {
+                "status": st.status,
+                "last_tick": st.last_tick.isoformat() if st.last_tick else None,
+                "version": __version__,
+                "revision": REVISION or None,
+            }
         )
 
     return app

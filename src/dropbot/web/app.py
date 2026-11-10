@@ -22,6 +22,7 @@ from fastapi.templating import Jinja2Templates
 from .. import REVISION, __version__, version_label
 from ..domain import Campaign, DropReason
 from ..farmer import Farmer
+from ..scheduler import competes
 from ..store import NoAccount
 from ..twitch import AuthError, TwitchError
 from ..twitch.protocol import LOGIN_URL
@@ -229,6 +230,18 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
         """Accept "name", "@name" or a twitch.tv URL."""
         return raw.strip().rstrip("/").lstrip("@").rsplit("/", 1)[-1].lower()
 
+    def competing_drops() -> dict[str, str]:
+        """Live channels left out because their Drops would take progress from the farmed one,
+        mapped to the name of the campaign being farmed."""
+        st = farmer.state
+        slot = st.plan.drop_slot
+        if slot is None or not isinstance(slot.reason, DropReason):
+            return {}
+        c = next((c for c in st.campaigns if c.id == slot.reason.campaign_id), None)
+        if c is None:
+            return {}
+        return {cid: c.name for cid, s in st.live.items() if competes(s, c)}
+
     @app.get("/channels", response_class=HTMLResponse)
     async def channels_page(request: Request, error: str = "", check: str = ""):
         checked = None
@@ -257,6 +270,7 @@ def create_app(farmer: Farmer, *, lifespan=None) -> FastAPI:
             on_list={c.channel.channel_id for c in channels},
             watched={s.stream.channel_id for s in farmer.state.plan.slots},
             skipped=farmer.state.skipped,
+            competing=competing_drops(),
         )
 
     @app.post("/channels/balances")

@@ -6,6 +6,16 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-10
+
+Fixes Drops that stopped progressing after a few minutes.
+
+### Fixed
+- **A selected Drop could stop progressing when a Points Channel had Drops of its own.** Twitch credits Drop progress to one channel at a time. When the points slot watched a stream with a different active campaign (seen live: a World of Warcraft stream next to a Crimson Desert Drop), Twitch moved the progress there, and the selected Drop stalled after a minute or two. While a Drop is being farmed, the points slot now skips such streams and takes the next Points Channel down the list instead. Streams that count for the same campaign are still used. Once no Drop is being farmed, the skipped channels are watched for points again.
+
+### Added
+- The Points Channels page marks a live channel left out for this reason with "paused for your Drop", and says why when you hover over it.
+
 ## [0.5.1] - 2026-11-10
 
 Shows which version is running.

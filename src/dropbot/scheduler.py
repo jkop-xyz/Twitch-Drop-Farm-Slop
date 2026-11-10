@@ -73,15 +73,27 @@ def pick_drop_stream(
     return max(eligible, key=lambda s: (s.viewers, s.channel_id))
 
 
+def competes(stream: Stream, farming: Campaign) -> bool:
+    """Would watching `stream` next to the Drop stream take progress away from `farming`?
+
+    Twitch credits Drop progress to one channel at a time. Watching a second stream with Drops
+    of its own (another game's campaign, say) can move the progress there, and the selected Drop
+    stalls. A stream that counts for the same campaign is harmless.
+    """
+    return stream.drops_enabled and not farming.accepts(stream)
+
+
 def plan(snap: Snapshot) -> Plan:
     points_rank = _points_rank(snap.points_channels)
     slots: list[SlotAssignment] = []
+    farming: Campaign | None = None
 
     for campaign in farmable_campaigns(snap):
         stream = pick_drop_stream(campaign, snap.live, points_rank, snap.current_drop_channel)
         if stream is not None:
             reason = DropReason(campaign.id, also_points=stream.channel_id in points_rank)
             slots.append(SlotAssignment(stream, reason))
+            farming = campaign
             break
 
     taken = {s.stream.channel_id for s in slots}
@@ -92,6 +104,8 @@ def plan(snap: Snapshot) -> Plan:
         if pc.points_off:
             continue
         stream = snap.live.get(pc.channel_id)
+        if stream is not None and farming is not None and competes(stream, farming):
+            continue
         if stream is not None and pc.channel_id not in taken:
             slots.append(SlotAssignment(stream, PointsReason()))
             taken.add(pc.channel_id)

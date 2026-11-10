@@ -6,7 +6,7 @@ import pytest
 from dropbot.farmer import Farmer
 from dropbot.web.app import create_app
 
-from .factories import NOW, campaign, drop, stream
+from .factories import NOW, OTHER_GAME, campaign, drop, stream
 from .fakes import FakeTwitch
 
 TOKEN = "goodtoken0123456789abc"
@@ -328,3 +328,17 @@ async def test_version_is_shown_in_footer_and_healthz(env):
     _, _, _, c = env
     assert f"v{__version__}" in (await c.get("/login")).text
     assert (await c.get("/healthz")).json()["version"] == __version__
+
+
+async def test_points_channel_with_competing_drops_says_why_it_is_not_watched(env):
+    farmer, tw, store, c = env
+    await farmer.login(TOKEN)
+    tw.campaign_list = [campaign("c1", allowed={"d"})]
+    tw.go_live(stream("d"))
+    tw.go_live(stream("p1", game=OTHER_GAME))  # has Drops of its own
+    await store.add_points_channel("p1", "userp1")
+    await farmer.tick()
+    await store.set_selected("c1", True)
+    await farmer.tick()
+    assert [s.stream.channel_id for s in farmer.state.plan.slots] == ["d"]
+    assert "paused for your Drop" in (await c.get("/channels")).text

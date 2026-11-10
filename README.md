@@ -22,7 +22,7 @@ It only farms passively. It never spends, bets or predicts anything. It's inspir
 
 - **You choose what to farm.** New campaigns appear unselected with a "new" badge. Campaigns that need a linked game account say so, and aren't farmed until you link it.
 - **Deadline first.** With several selected campaigns, the one ending soonest is farmed first. Each finished Drop is claimed automatically.
-- **Two Watch Slots.** Twitch credits about 2 streams at once. Drops get the first slot, and your highest-ranked live Points Channels get the rest. A stream that counts for both earns both.
+- **Two Watch Slots.** Twitch credits about 2 streams at once. Drops get the first slot, and your highest-ranked live Points Channels get the rest. A stream that counts for both earns both. While a Drop is being farmed, the points slot skips streams that have Drops for a different campaign, because Twitch would move your Drop progress to them.
 - **Channel Points.** Balances for each channel and what the bot earned per week. You can check your balance on any channel and import your follows.
 - **Drag to rank.** Reorder your Points Channels by dragging, on desktop or phone, or with the arrow keys.
 - **Skips channels without Channel Points.** Channels that have them turned off are greyed out and only watched when one is the stream for a Drop.

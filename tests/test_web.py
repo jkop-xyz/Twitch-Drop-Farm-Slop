@@ -360,3 +360,16 @@ async def test_every_live_points_channel_is_marked_paused_while_a_drop_is_farmed
     farmer.points_during_drops = True
     await farmer.tick()
     assert "paused for your Drop" not in (await c.get("/channels")).text
+
+
+async def test_page_scripts_wait_for_the_htmx_swap(env):
+    # With hx-boost, inline scripts run while the old and new page are both in the DOM: the
+    # campaign count came out doubled (98 -> 196). Page scripts must go through onPageReady.
+    farmer, tw, store, c = env
+    await farmer.login(TOKEN)
+    tw.campaign_list = [campaign("c1")]
+    await farmer.tick()
+    await store.add_points_channel("1", "user1")
+    for page in ("/campaigns", "/channels"):
+        html = (await c.get(page)).text
+        assert "onPageReady(() => {" in html and "<script>\n(() => {" not in html

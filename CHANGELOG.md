@@ -6,6 +6,13 @@ Versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-13
+
+Fixes the campaign count doubling after Refresh.
+
+### Fixed
+- **The campaign count could show double (e.g. 196 instead of 98)** after pressing Refresh or switching tabs. The UI loads pages without a full reload (htmx), and the page's script ran while the old and the new page were both still on screen, so it counted every campaign twice. Page scripts now wait until the swap is done. The same timing could also have hooked the campaign search and the Points Channels drag-and-drop to the old page's elements.
+
 ### Changed
 - "paused for your Drop" now marks every live Points Channel that waits while a Drop is farmed, not only those with Drops of their own. Hover over it to see which reason applies. The Points Channels subtitle describes the new watching rule.
 - README screenshots updated for v0.6.0's one-stream-while-farming-a-Drop behaviour.

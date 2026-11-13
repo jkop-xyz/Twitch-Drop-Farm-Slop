@@ -83,7 +83,7 @@ section.game h2 img { width: 1.6rem; aspect-ratio: 3/4; border-radius: 5px; obje
 {% endfor %}
 
 <script>
-(() => {
+onPageReady(() => {
   const input = document.getElementById("campaign-search");
   if (!input) return;
   const chips = [...document.querySelectorAll(".chip[data-filter]")];
@@ -145,6 +145,6 @@ section.game h2 img { width: 1.6rem; aspect-ratio: 3/4; border-radius: 5px; obje
     });
   }
   apply();
-})();
+});
 </script>
 {% endblock %}

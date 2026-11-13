@@ -133,7 +133,7 @@ tbody tr.saved td { animation: saved 1s ease-out; }
 {% endif %}
 
 <script>
-(() => {
+onPageReady(() => {
   // Drag-and-drop ranking. Pointer events cover mouse, pen and touch; arrow keys on a focused
   // handle do the same from the keyboard. The new order is saved in one request on drop.
   const rows = document.getElementById("channel-rows");
@@ -193,6 +193,6 @@ tbody tr.saved td { animation: saved 1s ease-out; }
     handle.focus();
     save(row, before);
   });
-})();
+});
 </script>
 {% endblock %}

@@ -9,7 +9,7 @@ aiosqlite==0.22.1
     # via dropbot (pyproject.toml)
 alembic==1.20.1
     # via dropbot (pyproject.toml)
-annotated-doc==0.0.5
+annotated-doc==0.0.6
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
@@ -21,7 +21,7 @@ attrs==26.1.0
     # via aiohttp
 click==8.5.1
     # via uvicorn
-fastapi==0.162.0
+fastapi==0.162.7
     # via dropbot (pyproject.toml)
 frozenlist==1.8.0
     # via
